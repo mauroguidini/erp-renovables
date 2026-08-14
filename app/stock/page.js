@@ -50,23 +50,23 @@ export default function Stock() {
   return (
     <div className="min-h-screen bg-zinc-50 p-8 font-sans">
       <div className="mx-auto max-w-3xl">
-        <h1 className="text-2xl font-semibold text-zinc-900">Stock</h1>
+        <h1 className="text-2xl font-semibold text-primary">Stock</h1>
 
         {cargando && <p className="mt-6 text-zinc-600">Cargando...</p>}
 
         {error && (
-          <div className="mt-6 rounded-lg border border-red-200 bg-red-50 p-4 text-red-800">
+          <div className="mt-6 rounded-lg border border-accent/30 bg-accent/10 p-4 text-accent">
             <p className="font-medium">No se pudo conectar con la base de datos.</p>
             <p className="mt-1 text-sm">Error: {error}</p>
           </div>
         )}
 
         {!cargando && !error && productosBajoMinimo.length > 0 && (
-          <div className="mt-6 rounded-lg border border-red-200 bg-red-50 p-4">
-            <p className="font-medium text-red-800">
+          <div className="mt-6 rounded-lg border border-accent/30 bg-accent/10 p-4">
+            <p className="font-medium text-accent">
               Productos por debajo del stock mínimo:
             </p>
-            <ul className="mt-2 text-sm text-red-800">
+            <ul className="mt-2 text-sm text-accent">
               {productosBajoMinimo.map((p) => (
                 <li key={p.codigo}>
                   {p.nombre} ({p.codigo}): {p.total} en stock, mínimo {p.stockMinimo}
@@ -94,12 +94,12 @@ export default function Stock() {
             <tbody className="divide-y divide-zinc-200">
               {filas.map((fila, i) => (
                 <tr key={i}>
-                  <td className="px-4 py-2 text-zinc-900">
+                  <td className="px-4 py-2 text-primary">
                     {fila.productos?.nombre}{" "}
                     <span className="text-zinc-400">({fila.productos?.codigo})</span>
                   </td>
-                  <td className="px-4 py-2 text-zinc-900">{fila.depositos?.nombre}</td>
-                  <td className="px-4 py-2 text-zinc-900">{fila.cantidad}</td>
+                  <td className="px-4 py-2 text-primary">{fila.depositos?.nombre}</td>
+                  <td className="px-4 py-2 text-primary">{fila.cantidad}</td>
                 </tr>
               ))}
             </tbody>

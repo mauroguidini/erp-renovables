@@ -63,7 +63,7 @@ export default function NuevoProductoForm({ onProductoCreado }) {
       onSubmit={handleSubmit}
       className="mt-6 rounded-lg border border-zinc-200 bg-white p-5"
     >
-      <h2 className="text-lg font-semibold text-zinc-900">Cargar producto nuevo</h2>
+      <h2 className="text-lg font-semibold text-primary">Cargar producto nuevo</h2>
 
       <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
@@ -75,7 +75,7 @@ export default function NuevoProductoForm({ onProductoCreado }) {
             type="text"
             value={form.codigo}
             onChange={(e) => actualizarCampo("codigo", e.target.value)}
-            className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
+            className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-primary"
             placeholder="Ej: PAN-450W"
           />
         </div>
@@ -89,7 +89,7 @@ export default function NuevoProductoForm({ onProductoCreado }) {
             type="text"
             value={form.nombre}
             onChange={(e) => actualizarCampo("nombre", e.target.value)}
-            className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
+            className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-primary"
             placeholder="Ej: Panel solar 450W"
           />
         </div>
@@ -101,7 +101,7 @@ export default function NuevoProductoForm({ onProductoCreado }) {
           <textarea
             value={form.descripcion}
             onChange={(e) => actualizarCampo("descripcion", e.target.value)}
-            className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
+            className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-primary"
             rows={2}
           />
         </div>
@@ -113,7 +113,7 @@ export default function NuevoProductoForm({ onProductoCreado }) {
           <select
             value={form.categoria}
             onChange={(e) => actualizarCampo("categoria", e.target.value)}
-            className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
+            className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-primary"
           >
             {CATEGORIAS.map((c) => (
               <option key={c} value={c}>
@@ -131,7 +131,7 @@ export default function NuevoProductoForm({ onProductoCreado }) {
             type="text"
             value={form.unidad_medida}
             onChange={(e) => actualizarCampo("unidad_medida", e.target.value)}
-            className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
+            className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-primary"
             placeholder="unidad, metro, kg..."
           />
         </div>
@@ -146,7 +146,7 @@ export default function NuevoProductoForm({ onProductoCreado }) {
             step="any"
             value={form.stock_minimo}
             onChange={(e) => actualizarCampo("stock_minimo", e.target.value)}
-            className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
+            className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-primary"
           />
         </div>
 
@@ -170,7 +170,7 @@ export default function NuevoProductoForm({ onProductoCreado }) {
       </div>
 
       {error && (
-        <p className="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-800">
+        <p className="mt-4 rounded-md bg-accent/10 px-3 py-2 text-sm text-accent">
           Error al guardar: {error}
         </p>
       )}
@@ -183,7 +183,7 @@ export default function NuevoProductoForm({ onProductoCreado }) {
       <button
         type="submit"
         disabled={guardando}
-        className="mt-5 rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
+        className="mt-5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90 disabled:opacity-50"
       >
         {guardando ? "Guardando..." : "Guardar producto"}
       </button>

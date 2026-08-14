@@ -32,10 +32,10 @@ export default function Compras() {
     <div className="min-h-screen bg-zinc-50 p-8 font-sans">
       <div className="mx-auto max-w-3xl">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-semibold text-zinc-900">Compras</h1>
+          <h1 className="text-2xl font-semibold text-primary">Compras</h1>
           <Link
             href="/compras/nueva"
-            className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700"
+            className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90"
           >
             Nueva compra
           </Link>
@@ -44,7 +44,7 @@ export default function Compras() {
         {cargando && <p className="mt-6 text-zinc-600">Cargando...</p>}
 
         {error && (
-          <div className="mt-6 rounded-lg border border-red-200 bg-red-50 p-4 text-red-800">
+          <div className="mt-6 rounded-lg border border-accent/30 bg-accent/10 p-4 text-accent">
             <p className="font-medium">No se pudo conectar con la base de datos.</p>
             <p className="mt-1 text-sm">Error: {error}</p>
           </div>
@@ -63,7 +63,7 @@ export default function Compras() {
                   className="flex items-center justify-between px-4 py-3 hover:bg-zinc-50"
                 >
                   <div>
-                    <span className="font-medium text-zinc-900">
+                    <span className="font-medium text-primary">
                       {c.proveedores?.nombre ?? "(sin proveedor)"}
                     </span>
                     <span className="ml-2 text-sm text-zinc-500">

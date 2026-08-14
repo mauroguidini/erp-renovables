@@ -67,7 +67,7 @@ export default function NuevaCompra() {
   return (
     <div className="min-h-screen bg-zinc-50 p-8 font-sans">
       <div className="mx-auto max-w-3xl">
-        <h1 className="text-2xl font-semibold text-zinc-900">Nueva compra</h1>
+        <h1 className="text-2xl font-semibold text-primary">Nueva compra</h1>
 
         {cargandoOpciones && <p className="mt-6 text-zinc-600">Cargando...</p>}
 
@@ -85,7 +85,7 @@ export default function NuevaCompra() {
                   required
                   value={proveedorId}
                   onChange={(e) => setProveedorId(e.target.value)}
-                  className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
+                  className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-primary"
                 >
                   <option value="" disabled>
                     Elegir proveedor...
@@ -106,7 +106,7 @@ export default function NuevaCompra() {
                   required
                   value={depositoId}
                   onChange={(e) => setDepositoId(e.target.value)}
-                  className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
+                  className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-primary"
                 >
                   <option value="" disabled>
                     Elegir depósito...
@@ -128,13 +128,13 @@ export default function NuevaCompra() {
                   type="date"
                   value={fecha}
                   onChange={(e) => setFecha(e.target.value)}
-                  className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
+                  className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-primary"
                 />
               </div>
             </div>
 
             {error && (
-              <p className="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-800">
+              <p className="mt-4 rounded-md bg-accent/10 px-3 py-2 text-sm text-accent">
                 Error al crear la compra: {error}
               </p>
             )}
@@ -142,7 +142,7 @@ export default function NuevaCompra() {
             <button
               type="submit"
               disabled={guardando}
-              className="mt-5 rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
+              className="mt-5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90 disabled:opacity-50"
             >
               {guardando ? "Creando..." : "Crear compra (borrador)"}
             </button>

@@ -35,8 +35,16 @@ export default function Login() {
         onSubmit={handleSubmit}
         className="w-full max-w-sm rounded-lg border border-zinc-200 bg-white p-6"
       >
-        <h1 className="text-xl font-semibold text-zinc-900">ERP Renovables</h1>
-        <p className="mt-1 text-sm text-zinc-500">Iniciá sesión para continuar</p>
+        <div className="flex justify-center">
+          <img src="/logo-bsi.png" alt="BSI" className="h-16 w-auto" />
+        </div>
+
+        <h1 className="mt-4 text-center text-xl font-semibold text-primary">
+          ERP Renovables
+        </h1>
+        <p className="mt-1 text-center text-sm text-zinc-500">
+          Iniciá sesión para continuar
+        </p>
 
         <div className="mt-6">
           <label className="block text-sm font-medium text-zinc-700">
@@ -47,7 +55,7 @@ export default function Login() {
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
+            className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-primary"
           />
         </div>
 
@@ -60,12 +68,12 @@ export default function Login() {
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
+            className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-primary"
           />
         </div>
 
         {error && (
-          <p className="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-800">
+          <p className="mt-4 rounded-md bg-accent/10 px-3 py-2 text-sm text-accent">
             {error}
           </p>
         )}
@@ -73,7 +81,7 @@ export default function Login() {
         <button
           type="submit"
           disabled={cargando}
-          className="mt-6 w-full rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
+          className="mt-6 w-full rounded-md bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90 disabled:opacity-50"
         >
           {cargando ? "Ingresando..." : "Ingresar"}
         </button>

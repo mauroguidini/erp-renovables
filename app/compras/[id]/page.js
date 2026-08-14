@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import LectorFactura from "./LectorFactura";
 
 export default function DetalleCompra() {
   const { id } = useParams();
@@ -13,6 +14,8 @@ export default function DetalleCompra() {
   const [productos, setProductos] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(null);
+
+  const [tab, setTab] = useState("manual");
 
   const [productoId, setProductoId] = useState("");
   const [cantidad, setCantidad] = useState("1");
@@ -121,7 +124,7 @@ export default function DetalleCompra() {
     return (
       <div className="min-h-screen bg-zinc-50 p-8 font-sans">
         <div className="mx-auto max-w-3xl">
-          <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-800">
+          <div className="rounded-lg border border-accent/30 bg-accent/10 p-4 text-accent">
             <p className="font-medium">No se pudo cargar la compra.</p>
             <p className="mt-1 text-sm">Error: {error}</p>
           </div>
@@ -144,7 +147,7 @@ export default function DetalleCompra() {
 
         <div className="mt-2 flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-semibold text-zinc-900">
+            <h1 className="text-2xl font-semibold text-primary">
               {compra.proveedores?.nombre} → {compra.depositos?.nombre}
             </h1>
             <p className="text-sm text-zinc-500">{compra.fecha}</p>
@@ -180,19 +183,19 @@ export default function DetalleCompra() {
               )}
               {items.map((item) => (
                 <tr key={item.id}>
-                  <td className="px-4 py-2 text-zinc-900">
+                  <td className="px-4 py-2 text-primary">
                     {item.productos?.nombre}{" "}
                     <span className="text-zinc-400">({item.productos?.codigo})</span>
                   </td>
-                  <td className="px-4 py-2 text-zinc-900">{item.cantidad}</td>
-                  <td className="px-4 py-2 text-zinc-900">
+                  <td className="px-4 py-2 text-primary">{item.cantidad}</td>
+                  <td className="px-4 py-2 text-primary">
                     {item.precio_costo ?? "—"}
                   </td>
                   {esBorrador && (
                     <td className="px-4 py-2 text-right">
                       <button
                         onClick={() => handleEliminarItem(item.id)}
-                        className="text-xs text-red-600 hover:underline"
+                        className="text-xs text-accent hover:underline"
                       >
                         Quitar
                       </button>
@@ -205,11 +208,44 @@ export default function DetalleCompra() {
         </div>
 
         {esBorrador && (
+          <div className="mt-6 flex gap-2">
+            <button
+              onClick={() => setTab("manual")}
+              className={`rounded-md px-3 py-1.5 text-sm font-medium ${
+                tab === "manual"
+                  ? "bg-primary text-white"
+                  : "bg-white text-zinc-600 border border-zinc-300"
+              }`}
+            >
+              Carga manual
+            </button>
+            <button
+              onClick={() => setTab("ocr")}
+              className={`rounded-md px-3 py-1.5 text-sm font-medium ${
+                tab === "ocr"
+                  ? "bg-primary text-white"
+                  : "bg-white text-zinc-600 border border-zinc-300"
+              }`}
+            >
+              Leer factura
+            </button>
+          </div>
+        )}
+
+        {esBorrador && tab === "ocr" && (
+          <LectorFactura
+            compraId={id}
+            productos={productos}
+            onItemsAgregados={cargarTodo}
+          />
+        )}
+
+        {esBorrador && tab === "manual" && (
           <form
             onSubmit={handleAgregarItem}
             className="mt-6 rounded-lg border border-zinc-200 bg-white p-5"
           >
-            <h2 className="text-lg font-semibold text-zinc-900">
+            <h2 className="text-lg font-semibold text-primary">
               Agregar producto
             </h2>
 
@@ -222,7 +258,7 @@ export default function DetalleCompra() {
                   required
                   value={productoId}
                   onChange={(e) => setProductoId(e.target.value)}
-                  className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
+                  className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-primary"
                 >
                   <option value="" disabled>
                     Elegir producto...
@@ -246,7 +282,7 @@ export default function DetalleCompra() {
                   step="any"
                   value={cantidad}
                   onChange={(e) => setCantidad(e.target.value)}
-                  className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
+                  className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-primary"
                 />
               </div>
 
@@ -260,13 +296,13 @@ export default function DetalleCompra() {
                   step="any"
                   value={precioCosto}
                   onChange={(e) => setPrecioCosto(e.target.value)}
-                  className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
+                  className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-primary"
                 />
               </div>
             </div>
 
             {errorItem && (
-              <p className="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-800">
+              <p className="mt-4 rounded-md bg-accent/10 px-3 py-2 text-sm text-accent">
                 Error al agregar: {errorItem}
               </p>
             )}
@@ -274,7 +310,7 @@ export default function DetalleCompra() {
             <button
               type="submit"
               disabled={agregando}
-              className="mt-5 rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
+              className="mt-5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90 disabled:opacity-50"
             >
               {agregando ? "Agregando..." : "Agregar a la compra"}
             </button>
@@ -283,7 +319,7 @@ export default function DetalleCompra() {
 
         {esBorrador && (
           <div className="mt-6 rounded-lg border border-zinc-200 bg-white p-5">
-            <h2 className="text-lg font-semibold text-zinc-900">
+            <h2 className="text-lg font-semibold text-primary">
               Confirmar compra
             </h2>
             <p className="mt-1 text-sm text-zinc-600">
@@ -293,7 +329,7 @@ export default function DetalleCompra() {
             </p>
 
             {errorConfirmar && (
-              <p className="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-800">
+              <p className="mt-4 rounded-md bg-accent/10 px-3 py-2 text-sm text-accent">
                 Error al confirmar: {errorConfirmar}
               </p>
             )}
@@ -301,7 +337,7 @@ export default function DetalleCompra() {
             <button
               onClick={handleConfirmar}
               disabled={confirmando || items.length === 0}
-              className="mt-4 rounded-md bg-green-700 px-4 py-2 text-sm font-medium text-white hover:bg-green-800 disabled:opacity-50"
+              className="mt-4 rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent/90 disabled:opacity-50"
             >
               {confirmando ? "Confirmando..." : "Confirmar compra"}
             </button>

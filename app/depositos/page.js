@@ -32,12 +32,12 @@ export default function Depositos() {
   return (
     <div className="min-h-screen bg-zinc-50 p-8 font-sans">
       <div className="mx-auto max-w-3xl">
-        <h1 className="text-2xl font-semibold text-zinc-900">Depósitos</h1>
+        <h1 className="text-2xl font-semibold text-primary">Depósitos</h1>
 
         {cargando && <p className="mt-6 text-zinc-600">Cargando...</p>}
 
         {error && (
-          <div className="mt-6 rounded-lg border border-red-200 bg-red-50 p-4 text-red-800">
+          <div className="mt-6 rounded-lg border border-accent/30 bg-accent/10 p-4 text-accent">
             <p className="font-medium">No se pudo conectar con la base de datos.</p>
             <p className="mt-1 text-sm">Error: {error}</p>
           </div>
@@ -52,7 +52,7 @@ export default function Depositos() {
             {depositos.map((d) => (
               <li key={d.id} className="flex justify-between px-4 py-3">
                 <div>
-                  <span className="font-medium text-zinc-900">{d.nombre}</span>
+                  <span className="font-medium text-primary">{d.nombre}</span>
                   {d.responsable && (
                     <span className="ml-2 text-sm text-zinc-500">
                       ({d.responsable})

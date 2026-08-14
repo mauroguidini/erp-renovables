@@ -3,16 +3,15 @@
 import { useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 
-const TIPOS = ["deposito", "camioneta", "obra"];
-
 const valoresIniciales = {
   nombre: "",
-  tipo: "deposito",
-  responsable: "",
-  activo: true,
+  contacto_telefono: "",
+  contacto_email: "",
+  direccion: "",
+  cuit: "",
 };
 
-export default function NuevoDepositoForm({ onDepositoCreado }) {
+export default function NuevoClienteForm({ onClienteCreado }) {
   const [form, setForm] = useState(valoresIniciales);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState(null);
@@ -28,11 +27,12 @@ export default function NuevoDepositoForm({ onDepositoCreado }) {
     setError(null);
     setExito(false);
 
-    const { error } = await supabase.from("depositos").insert({
+    const { error } = await supabase.from("clientes").insert({
       nombre: form.nombre.trim(),
-      tipo: form.tipo,
-      responsable: form.responsable.trim() || null,
-      activo: form.activo,
+      contacto_telefono: form.contacto_telefono.trim() || null,
+      contacto_email: form.contacto_email.trim() || null,
+      direccion: form.direccion.trim() || null,
+      cuit: form.cuit.trim() || null,
     });
 
     if (error) {
@@ -40,7 +40,7 @@ export default function NuevoDepositoForm({ onDepositoCreado }) {
     } else {
       setExito(true);
       setForm(valoresIniciales);
-      onDepositoCreado?.();
+      onClienteCreado?.();
     }
     setGuardando(false);
   }
@@ -50,10 +50,10 @@ export default function NuevoDepositoForm({ onDepositoCreado }) {
       onSubmit={handleSubmit}
       className="mt-6 rounded-lg border border-zinc-200 bg-white p-5"
     >
-      <h2 className="text-lg font-semibold text-primary">Cargar depósito nuevo</h2>
+      <h2 className="text-lg font-semibold text-primary">Cargar cliente nuevo</h2>
 
       <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div>
+        <div className="sm:col-span-2">
           <label className="block text-sm font-medium text-zinc-700">
             Nombre *
           </label>
@@ -63,51 +63,59 @@ export default function NuevoDepositoForm({ onDepositoCreado }) {
             value={form.nombre}
             onChange={(e) => actualizarCampo("nombre", e.target.value)}
             className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-primary"
-            placeholder="Ej: Depósito Central"
+            placeholder="Ej: Juan Pérez"
           />
         </div>
 
         <div>
           <label className="block text-sm font-medium text-zinc-700">
-            Tipo *
-          </label>
-          <select
-            value={form.tipo}
-            onChange={(e) => actualizarCampo("tipo", e.target.value)}
-            className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-primary"
-          >
-            {TIPOS.map((t) => (
-              <option key={t} value={t}>
-                {t}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-zinc-700">
-            Responsable
+            Teléfono
           </label>
           <input
             type="text"
-            value={form.responsable}
-            onChange={(e) => actualizarCampo("responsable", e.target.value)}
+            value={form.contacto_telefono}
+            onChange={(e) =>
+              actualizarCampo("contacto_telefono", e.target.value)
+            }
             className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-primary"
-            placeholder="Nombre de quien lo maneja"
           />
         </div>
 
-        <div className="flex items-center gap-2 pt-6">
-          <input
-            id="activo"
-            type="checkbox"
-            checked={form.activo}
-            onChange={(e) => actualizarCampo("activo", e.target.checked)}
-            className="h-4 w-4 rounded border-zinc-300"
-          />
-          <label htmlFor="activo" className="text-sm text-zinc-700">
-            Activo
+        <div>
+          <label className="block text-sm font-medium text-zinc-700">
+            Email
           </label>
+          <input
+            type="email"
+            value={form.contacto_email}
+            onChange={(e) => actualizarCampo("contacto_email", e.target.value)}
+            className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-primary"
+          />
+        </div>
+
+        <div className="sm:col-span-2">
+          <label className="block text-sm font-medium text-zinc-700">
+            Dirección
+          </label>
+          <input
+            type="text"
+            value={form.direccion}
+            onChange={(e) => actualizarCampo("direccion", e.target.value)}
+            className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-primary"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-zinc-700">
+            CUIT / DNI
+          </label>
+          <input
+            type="text"
+            value={form.cuit}
+            onChange={(e) => actualizarCampo("cuit", e.target.value)}
+            className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-primary"
+            placeholder="30-12345678-9"
+          />
         </div>
       </div>
 
@@ -118,7 +126,7 @@ export default function NuevoDepositoForm({ onDepositoCreado }) {
       )}
       {exito && (
         <p className="mt-4 rounded-md bg-green-50 px-3 py-2 text-sm text-green-800">
-          Depósito guardado correctamente.
+          Cliente guardado correctamente.
         </p>
       )}
 
@@ -127,7 +135,7 @@ export default function NuevoDepositoForm({ onDepositoCreado }) {
         disabled={guardando}
         className="mt-5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90 disabled:opacity-50"
       >
-        {guardando ? "Guardando..." : "Guardar depósito"}
+        {guardando ? "Guardando..." : "Guardar cliente"}
       </button>
     </form>
   );
