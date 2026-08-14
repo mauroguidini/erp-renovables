@@ -3,12 +3,14 @@
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
-import NavBar from "./NavBar";
+import Sidebar from "./Sidebar";
+import { RoleContext } from "./RoleContext";
 
 export default function AuthGate({ children }) {
   const pathname = usePathname();
   const router = useRouter();
   const [session, setSession] = useState(undefined);
+  const [role, setRole] = useState(undefined);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
@@ -21,6 +23,20 @@ export default function AuthGate({ children }) {
 
     return () => listener.subscription.unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (!session) {
+      setRole(undefined);
+      return;
+    }
+
+    supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", session.user.id)
+      .single()
+      .then(({ data }) => setRole(data?.role ?? "capataz"));
+  }, [session]);
 
   useEffect(() => {
     if (session === undefined) return;
@@ -48,10 +64,18 @@ export default function AuthGate({ children }) {
     return null;
   }
 
+  if (role === undefined) {
+    return (
+      <div className="flex min-h-screen items-center justify-center text-zinc-500">
+        Cargando...
+      </div>
+    );
+  }
+
   return (
-    <>
-      <NavBar session={session} />
-      {children}
-    </>
+    <RoleContext.Provider value={role}>
+      <Sidebar session={session} role={role} />
+      <div className="md:pl-64 print:pl-0">{children}</div>
+    </RoleContext.Provider>
   );
 }
