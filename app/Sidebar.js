@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Menu, X, Package, Handshake, HardHat, LogOut, Home } from "lucide-react";
+import { Menu, X, Package, Handshake, HardHat, LogOut, Home, Users } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 
 const INICIO = { href: "/", label: "Inicio", Icon: Home };
@@ -51,6 +51,12 @@ const GRUPOS = [
         roles: ["administrador", "jefe_obra"],
       },
     ],
+  },
+  {
+    label: "Sistema",
+    Icon: Users,
+    roles: ["administrador"],
+    links: [{ href: "/usuarios", label: "Usuarios" }],
   },
 ];
 
