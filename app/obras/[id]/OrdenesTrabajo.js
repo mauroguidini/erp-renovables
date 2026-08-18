@@ -210,7 +210,7 @@ function GrupoHito({ hito, ots, ...cardProps }) {
   );
 }
 
-export default function OrdenesTrabajo({ obraId, hitos }) {
+export default function OrdenesTrabajo({ obraId, hitos, onHitosCambio }) {
   const role = useRole();
   const puedeGestionar = role === "administrador" || role === "jefe_obra";
   const puedeMarcarEstado =
@@ -425,7 +425,12 @@ export default function OrdenesTrabajo({ obraId, hitos }) {
       </div>
 
       {puedeGestionar && (
-        <ImportarPlanTrabajo obraId={obraId} hitos={hitos} onImportado={cargarOts} />
+        <ImportarPlanTrabajo
+          obraId={obraId}
+          hitos={hitos}
+          onImportado={cargarOts}
+          onHitosCreados={onHitosCambio}
+        />
       )}
 
       {error && (

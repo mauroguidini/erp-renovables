@@ -405,7 +405,7 @@ export default function DetalleObra() {
 
         <Hitos obraId={id} hitos={hitos} onCambio={cargarHitos} />
 
-        <OrdenesTrabajo obraId={id} hitos={hitos} />
+        <OrdenesTrabajo obraId={id} hitos={hitos} onHitosCambio={cargarHitos} />
       </div>
     </div>
   );

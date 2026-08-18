@@ -104,7 +104,13 @@ function validarFilas(filas, hitos) {
       );
     }
 
+    // Si el hito no existe todavía en esta obra, no es un error: se crea
+    // solo al confirmar la importación (una sola vez por nombre, aunque se
+    // repita en varias filas). "hitoNombreNuevo" es solo una marca interna
+    // para resolver eso en handleConfirmarImportacion — no es una columna
+    // real de ordenes_trabajo.
     let hitoId = null;
+    let hitoNombreNuevo = null;
     if (nombreHito) {
       const encontrado = hitos.find(
         (h) => h.nombre.trim().toLowerCase() === nombreHito.toLowerCase()
@@ -112,9 +118,7 @@ function validarFilas(filas, hitos) {
       if (encontrado) {
         hitoId = encontrado.id;
       } else {
-        problemas.push(
-          `el hito "${nombreHito}" no existe en esta obra (revisá que el nombre sea exactamente igual)`
-        );
+        hitoNombreNuevo = nombreHito;
       }
     }
 
@@ -129,6 +133,7 @@ function validarFilas(filas, hitos) {
         descripcion,
         responsable: responsable || null,
         hito_id: hitoId,
+        hitoNombreNuevo,
         fecha_inicio: fechaInicio,
         fecha_limite: fechaLimite,
         tipo: "programada",
@@ -158,7 +163,8 @@ async function descargarPlantilla() {
   const hojaAyuda = XLSX.utils.aoa_to_sheet([
     ["fecha_limite acepta DD/MM/AAAA o AAAA-MM-DD"],
     ["responsable es opcional"],
-    ["hito es opcional — tiene que ser el nombre EXACTO de un hito ya creado en esta obra"],
+    ["hito es opcional. Si ya existe uno con ese nombre en esta obra, se usa ese"],
+    ["si no existe, se crea solo (una sola vez, aunque se repita en varias filas)"],
     ["si dejás \"hito\" vacío, o no lo incluís, la tarea entra sin hito asignado"],
     ["fecha_inicio es opcional, mismo formato que fecha_limite"],
   ]);
@@ -167,7 +173,7 @@ async function descargarPlantilla() {
   XLSX.writeFile(libro, "plantilla_plan_trabajo.xlsx");
 }
 
-export default function ImportarPlanTrabajo({ obraId, hitos, onImportado }) {
+export default function ImportarPlanTrabajo({ obraId, hitos, onImportado, onHitosCreados }) {
   const [abierto, setAbierto] = useState(false);
   const [archivo, setArchivo] = useState(null);
   const [validando, setValidando] = useState(false);
@@ -211,19 +217,53 @@ export default function ImportarPlanTrabajo({ obraId, hitos, onImportado }) {
     setImportando(true);
     setErrorImportar(null);
 
-    const { error } = await supabase.from("ordenes_trabajo").insert(
-      resultado.validas.map((v) => ({ ...v, obra_id: obraId }))
-    );
+    // Nombres de hitos nuevos, una sola vez cada uno (sin distinguir
+    // mayúsculas/minúsculas), en el orden en que aparecen en la planilla.
+    const nombresNuevos = [];
+    const vistos = new Set();
+    resultado.validas.forEach((v) => {
+      if (!v.hitoNombreNuevo) return;
+      const clave = v.hitoNombreNuevo.toLowerCase();
+      if (!vistos.has(clave)) {
+        vistos.add(clave);
+        nombresNuevos.push(v.hitoNombreNuevo);
+      }
+    });
+
+    let idPorNombreNuevo = {};
+    if (nombresNuevos.length > 0) {
+      const { data: hitosCreados, error: errorHitos } = await supabase
+        .from("hitos")
+        .insert(nombresNuevos.map((nombre) => ({ obra_id: obraId, nombre })))
+        .select("id, nombre");
+
+      if (errorHitos) {
+        setErrorImportar(errorHitos.message);
+        setImportando(false);
+        return;
+      }
+
+      hitosCreados.forEach((h) => {
+        idPorNombreNuevo[h.nombre.toLowerCase()] = h.id;
+      });
+    }
+
+    const filas = resultado.validas.map(({ hitoNombreNuevo, ...v }) => ({
+      ...v,
+      hito_id: v.hito_id ?? (hitoNombreNuevo ? idPorNombreNuevo[hitoNombreNuevo.toLowerCase()] : null),
+      obra_id: obraId,
+    }));
+
+    const { error } = await supabase.from("ordenes_trabajo").insert(filas);
 
     if (error) {
       setErrorImportar(error.message);
     } else {
-      setExito(
-        `Se importaron ${resultado.validas.length} tareas al plan de trabajo.`
-      );
+      setExito({ cantidad: resultado.validas.length, hitosNuevos: nombresNuevos });
       setResultado(null);
       setArchivo(null);
       onImportado?.();
+      if (nombresNuevos.length > 0) onHitosCreados?.();
     }
     setImportando(false);
   }
@@ -267,9 +307,16 @@ export default function ImportarPlanTrabajo({ obraId, hitos, onImportado }) {
           )}
 
           {exito && (
-            <p className="mt-3 rounded-md bg-green-50 px-3 py-2 text-sm text-green-800">
-              {exito}
-            </p>
+            <div className="mt-3 rounded-md bg-green-50 px-3 py-2 text-sm text-green-800">
+              <p>Se importaron {exito.cantidad} tareas al plan de trabajo.</p>
+              {exito.hitosNuevos.length > 0 && (
+                <p className="mt-1">
+                  {exito.hitosNuevos.length === 1
+                    ? `Se creó un hito nuevo: ${exito.hitosNuevos[0]}.`
+                    : `Se crearon ${exito.hitosNuevos.length} hitos nuevos: ${exito.hitosNuevos.join(", ")}.`}
+                </p>
+              )}
+            </div>
           )}
 
           {resultado && (
