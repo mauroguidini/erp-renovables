@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
-import { resend, REMITENTE_ALERTAS, emailsAdministradores } from "@/lib/resend";
+import { resend, REMITENTE_ALERTAS, destinatariosAlertas } from "@/lib/resend";
 import { MOTIVOS } from "@/app/otConstants";
 
 const SITIO_URL = "https://erp-renovables.vercel.app";
@@ -44,7 +44,7 @@ export async function POST(request) {
 
   let destinatarios;
   try {
-    destinatarios = await emailsAdministradores();
+    destinatarios = await destinatariosAlertas();
   } catch (err) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
@@ -55,7 +55,7 @@ export async function POST(request) {
 
   const enlaceObra = obra ? `${SITIO_URL}/obras/${obra.id}` : SITIO_URL;
 
-  await resend.emails.send({
+  const { error: errorEnvio } = await resend.emails.send({
     from: REMITENTE_ALERTAS,
     to: destinatarios,
     subject: `OT no cumplida — ${obra?.direccion ?? "obra"}`,
@@ -71,6 +71,10 @@ export async function POST(request) {
       <p><a href="${enlaceObra}">Ver la obra</a></p>
     `,
   });
+
+  if (errorEnvio) {
+    return NextResponse.json({ error: errorEnvio.message }, { status: 500 });
+  }
 
   return NextResponse.json({ ok: true });
 }

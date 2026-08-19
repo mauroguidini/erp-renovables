@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
-import { resend, REMITENTE_ALERTAS, emailsAdministradores } from "@/lib/resend";
+import { resend, REMITENTE_ALERTAS, destinatariosAlertas } from "@/lib/resend";
 
 const SITIO_URL = "https://erp-renovables.vercel.app";
 
@@ -61,7 +61,7 @@ export async function GET(request) {
 
   let destinatarios;
   try {
-    destinatarios = await emailsAdministradores();
+    destinatarios = await destinatariosAlertas();
   } catch (err) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
@@ -100,7 +100,7 @@ export async function GET(request) {
         </ul>
       `;
 
-  await resend.emails.send({
+  const { error: errorEnvio } = await resend.emails.send({
     from: REMITENTE_ALERTAS,
     to: destinatarios,
     subject: "Resumen diario de alertas — ERP Renovables",
@@ -111,6 +111,10 @@ export async function GET(request) {
       <p><a href="${SITIO_URL}">Ir al sistema</a></p>
     `,
   });
+
+  if (errorEnvio) {
+    return NextResponse.json({ error: errorEnvio.message }, { status: 500 });
+  }
 
   return NextResponse.json({ ok: true, productosBajoMinimo: productosBajoMinimo.length, hitosVencidos: hitosVencidosLista.length });
 }
