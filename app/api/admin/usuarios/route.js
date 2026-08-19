@@ -7,6 +7,7 @@ const ROLES_VALIDOS = [
   "jefe_obra",
   "compras",
   "administracion",
+  "consulta",
 ];
 
 export async function POST(request) {

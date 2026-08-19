@@ -36,10 +36,19 @@ const GRUPOS = [
   {
     label: "Obras",
     Icon: HardHat,
-    roles: ["administrador", "capataz", "jefe_obra", "administracion"],
+    roles: ["administrador", "capataz", "jefe_obra", "administracion", "consulta"],
     links: [
-      { href: "/obras", label: "Obras" },
-      { href: "/ot", label: "OT", badge: "otPendientes" },
+      {
+        href: "/obras",
+        label: "Obras",
+        roles: ["administrador", "capataz", "jefe_obra", "administracion", "consulta"],
+      },
+      {
+        href: "/ot",
+        label: "OT",
+        badge: "otPendientes",
+        roles: ["administrador", "capataz", "jefe_obra", "administracion"],
+      },
       {
         href: "/empleados",
         label: "Empleados",

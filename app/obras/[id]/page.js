@@ -8,6 +8,7 @@ import OrdenesTrabajo from "./OrdenesTrabajo";
 import RemitosObra from "./RemitosObra";
 import Hitos from "./Hitos";
 import ArchivosObra from "./ArchivosObra";
+import EstadoObraConsulta from "./EstadoObraConsulta";
 
 const ESTADOS = [
   "presupuestada",
@@ -38,8 +39,17 @@ function Dato({ etiqueta, valor }) {
 
 export default function DetalleObra() {
   const role = useRole();
-  const puedeGestionar = role === "administrador" || role === "jefe_obra";
   const { id } = useParams();
+
+  if (role === "consulta") {
+    return <EstadoObraConsulta obraId={id} />;
+  }
+
+  return <DetalleObraCompleto id={id} role={role} />;
+}
+
+function DetalleObraCompleto({ id, role }) {
+  const puedeGestionar = role === "administrador" || role === "jefe_obra";
   const router = useRouter();
   const [obra, setObra] = useState(null);
   const [clienteDetalle, setClienteDetalle] = useState(null);

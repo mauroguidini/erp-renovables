@@ -10,6 +10,7 @@ const ROLES = [
   { value: "jefe_obra", label: "Jefe de obra" },
   { value: "compras", label: "Compras" },
   { value: "administracion", label: "Administración" },
+  { value: "consulta", label: "Consulta (solo lectura)" },
 ];
 
 const valoresIniciales = { email: "", password: "", role: "capataz" };
