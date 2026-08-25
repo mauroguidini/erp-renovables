@@ -15,11 +15,13 @@ const ESTADOS = [
 export default function NuevaObra() {
   const router = useRouter();
   const [clientes, setClientes] = useState([]);
+  const [tiposObra, setTiposObra] = useState([]);
   const [cargandoOpciones, setCargandoOpciones] = useState(true);
   const [error, setError] = useState(null);
   const [guardando, setGuardando] = useState(false);
 
   const [clienteId, setClienteId] = useState("");
+  const [tipoObraId, setTipoObraId] = useState("");
   const [direccion, setDireccion] = useState("");
   const [potenciaKwp, setPotenciaKwp] = useState("");
   const [fechaInicio, setFechaInicio] = useState("");
@@ -27,22 +29,33 @@ export default function NuevaObra() {
   const [estado, setEstado] = useState("presupuestada");
   const [presupuesto, setPresupuesto] = useState("");
 
-  useEffect(() => {
-    async function cargarClientes() {
-      const { data, error } = await supabase
-        .from("clientes_nombre")
-        .select("id, nombre")
-        .order("nombre");
+  const esSolar = tiposObra.find((t) => t.id === tipoObraId)?.codigo === "solar";
 
-      if (error) {
-        setError(error.message);
+  useEffect(() => {
+    async function cargarOpciones() {
+      const [clientesRes, tiposObraRes] = await Promise.all([
+        supabase.from("clientes_nombre").select("id, nombre").order("nombre"),
+        supabase
+          .from("tipos_obra")
+          .select("id, codigo, nombre")
+          .eq("activo", true)
+          .order("nombre"),
+      ]);
+
+      if (clientesRes.error) {
+        setError(clientesRes.error.message);
+      } else if (tiposObraRes.error) {
+        setError(tiposObraRes.error.message);
       } else {
-        setClientes(data);
+        setClientes(clientesRes.data);
+        setTiposObra(tiposObraRes.data);
+        const solar = tiposObraRes.data.find((t) => t.codigo === "solar");
+        if (solar) setTipoObraId(solar.id);
       }
       setCargandoOpciones(false);
     }
 
-    cargarClientes();
+    cargarOpciones();
   }, []);
 
   async function handleSubmit(e) {
@@ -54,8 +67,9 @@ export default function NuevaObra() {
       .from("obras")
       .insert({
         cliente_id: clienteId,
+        tipo_obra_id: tipoObraId,
         direccion: direccion.trim(),
-        potencia_kwp: Number(potenciaKwp),
+        potencia_kwp: esSolar ? Number(potenciaKwp) : null,
         fecha_inicio: fechaInicio || null,
         fecha_fin_estimada: fechaFinEstimada || null,
         estado,
@@ -113,6 +127,27 @@ export default function NuevaObra() {
                 </select>
               </div>
 
+              <div>
+                <label className="block text-sm font-medium text-zinc-700">
+                  Tipo de obra *
+                </label>
+                <select
+                  required
+                  value={tipoObraId}
+                  onChange={(e) => setTipoObraId(e.target.value)}
+                  className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-primary"
+                >
+                  <option value="" disabled>
+                    Elegir tipo...
+                  </option>
+                  {tiposObra.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.nombre}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               <div className="sm:col-span-2">
                 <label className="block text-sm font-medium text-zinc-700">
                   Dirección de la obra *
@@ -126,20 +161,22 @@ export default function NuevaObra() {
                 />
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-zinc-700">
-                  Potencia instalada (kWp) *
-                </label>
-                <input
-                  required
-                  type="number"
-                  min="0.01"
-                  step="any"
-                  value={potenciaKwp}
-                  onChange={(e) => setPotenciaKwp(e.target.value)}
-                  className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-primary"
-                />
-              </div>
+              {esSolar && (
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700">
+                    Potencia instalada (kWp) *
+                  </label>
+                  <input
+                    required
+                    type="number"
+                    min="0.01"
+                    step="any"
+                    value={potenciaKwp}
+                    onChange={(e) => setPotenciaKwp(e.target.value)}
+                    className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-primary"
+                  />
+                </div>
+              )}
 
               <div>
                 <label className="block text-sm font-medium text-zinc-700">

@@ -54,6 +54,7 @@ function DetalleObraCompleto({ id, role }) {
   const [obra, setObra] = useState(null);
   const [clienteDetalle, setClienteDetalle] = useState(null);
   const [clientes, setClientes] = useState([]);
+  const [tiposObra, setTiposObra] = useState([]);
   const [error, setError] = useState(null);
   const [cargando, setCargando] = useState(true);
 
@@ -114,7 +115,16 @@ function DetalleObraCompleto({ id, role }) {
       .select("id, nombre")
       .order("nombre")
       .then(({ data }) => setClientes(data ?? []));
+    supabase
+      .from("tipos_obra")
+      .select("id, codigo, nombre")
+      .eq("activo", true)
+      .order("nombre")
+      .then(({ data }) => setTiposObra(data ?? []));
   }, [cargarObra, cargarHitos]);
+
+  const tipoObraActual = tiposObra.find((t) => t.id === obra?.tipo_obra_id);
+  const esSolarObra = tipoObraActual?.codigo === "solar";
 
   async function handleCambiarEstado(nuevoEstado) {
     setGuardandoEstado(true);
@@ -136,8 +146,9 @@ function DetalleObraCompleto({ id, role }) {
   function iniciarEdicion() {
     setForm({
       cliente_id: obra.cliente_id,
+      tipo_obra_id: obra.tipo_obra_id,
       direccion: obra.direccion,
-      potencia_kwp: String(obra.potencia_kwp),
+      potencia_kwp: obra.potencia_kwp != null ? String(obra.potencia_kwp) : "",
       fecha_inicio: obra.fecha_inicio ?? "",
       fecha_fin_estimada: obra.fecha_fin_estimada ?? "",
       presupuesto: obra.presupuesto != null ? String(obra.presupuesto) : "",
@@ -150,6 +161,8 @@ function DetalleObraCompleto({ id, role }) {
     setForm((prev) => ({ ...prev, [campo]: valor }));
   }
 
+  const esSolarForm = tiposObra.find((t) => t.id === form?.tipo_obra_id)?.codigo === "solar";
+
   async function handleGuardarEdicion(e) {
     e.preventDefault();
     setGuardandoEdicion(true);
@@ -159,8 +172,9 @@ function DetalleObraCompleto({ id, role }) {
       .from("obras")
       .update({
         cliente_id: form.cliente_id,
+        tipo_obra_id: form.tipo_obra_id,
         direccion: form.direccion.trim(),
-        potencia_kwp: Number(form.potencia_kwp),
+        potencia_kwp: esSolarForm ? Number(form.potencia_kwp) : null,
         fecha_inicio: form.fecha_inicio || null,
         fecha_fin_estimada: form.fecha_fin_estimada || null,
         presupuesto: form.presupuesto ? Number(form.presupuesto) : null,
@@ -260,7 +274,10 @@ function DetalleObraCompleto({ id, role }) {
                 )}
               </div>
               <dl className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <Dato etiqueta="Potencia instalada" valor={`${obra.potencia_kwp} kWp`} />
+                <Dato etiqueta="Tipo de obra" valor={tipoObraActual?.nombre} />
+                {esSolarObra && (
+                  <Dato etiqueta="Potencia instalada" valor={`${obra.potencia_kwp} kWp`} />
+                )}
                 <Dato
                   etiqueta="Presupuesto"
                   valor={obra.presupuesto != null ? `$${obra.presupuesto}` : null}
@@ -315,6 +332,24 @@ function DetalleObraCompleto({ id, role }) {
                 </select>
               </div>
 
+              <div>
+                <label className="block text-sm font-medium text-zinc-700">
+                  Tipo de obra *
+                </label>
+                <select
+                  required
+                  value={form.tipo_obra_id}
+                  onChange={(e) => actualizarCampo("tipo_obra_id", e.target.value)}
+                  className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-primary"
+                >
+                  {tiposObra.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.nombre}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               <div className="sm:col-span-2">
                 <label className="block text-sm font-medium text-zinc-700">
                   Dirección de la obra *
@@ -328,20 +363,22 @@ function DetalleObraCompleto({ id, role }) {
                 />
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-zinc-700">
-                  Potencia instalada (kWp) *
-                </label>
-                <input
-                  required
-                  type="number"
-                  min="0.01"
-                  step="any"
-                  value={form.potencia_kwp}
-                  onChange={(e) => actualizarCampo("potencia_kwp", e.target.value)}
-                  className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-primary"
-                />
-              </div>
+              {esSolarForm && (
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700">
+                    Potencia instalada (kWp) *
+                  </label>
+                  <input
+                    required
+                    type="number"
+                    min="0.01"
+                    step="any"
+                    value={form.potencia_kwp}
+                    onChange={(e) => actualizarCampo("potencia_kwp", e.target.value)}
+                    className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-primary"
+                  />
+                </div>
+              )}
 
               <div>
                 <label className="block text-sm font-medium text-zinc-700">
