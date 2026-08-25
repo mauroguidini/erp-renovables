@@ -9,6 +9,7 @@ import RemitosObra from "./RemitosObra";
 import Hitos from "./Hitos";
 import ArchivosObra from "./ArchivosObra";
 import EstadoObraConsulta from "./EstadoObraConsulta";
+import ZonaPeligrosaObra from "./ZonaPeligrosaObra";
 
 const ESTADOS = [
   "presupuestada",
@@ -229,6 +230,11 @@ function DetalleObraCompleto({ id, role }) {
           </h1>
 
           <div className="flex items-center gap-3">
+            {obra.archivada && (
+              <span className="rounded-full bg-zinc-200 px-3 py-1 text-sm font-medium text-zinc-600">
+                Archivada
+              </span>
+            )}
             <span
               className={`rounded-full px-3 py-1 text-sm font-medium ${
                 ESTADO_COLOR[obra.estado] ?? "bg-zinc-100 text-zinc-800"
@@ -453,6 +459,8 @@ function DetalleObraCompleto({ id, role }) {
         <Hitos obraId={id} hitos={hitos} onCambio={cargarHitos} />
 
         <OrdenesTrabajo obraId={id} hitos={hitos} onHitosCambio={cargarHitos} />
+
+        <ZonaPeligrosaObra obra={obra} onCambio={cargarObra} />
       </div>
     </div>
   );

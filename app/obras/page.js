@@ -33,6 +33,7 @@ export default function Obras() {
     searchParams.get("estado") ?? ""
   );
   const [filtroTipo, setFiltroTipo] = useState("");
+  const [mostrarArchivadas, setMostrarArchivadas] = useState(false);
 
   const [nombresClientes, setNombresClientes] = useState({});
   const [tiposObra, setTiposObra] = useState([]);
@@ -41,7 +42,9 @@ export default function Obras() {
     async function cargarObras() {
       const { data, error } = await supabase
         .from("obras")
-        .select("id, direccion, potencia_kwp, fecha_inicio, estado, cliente_id, tipo_obra_id")
+        .select(
+          "id, direccion, potencia_kwp, fecha_inicio, estado, cliente_id, tipo_obra_id, archivada"
+        )
         .order("created_at", { ascending: false });
 
       if (error) {
@@ -76,6 +79,7 @@ export default function Obras() {
   }, []);
 
   const obrasFiltradas = obras
+    .filter((o) => mostrarArchivadas || !o.archivada)
     .filter((o) => !filtroEstado || o.estado === filtroEstado)
     .filter((o) => !filtroTipo || o.tipo_obra_id === filtroTipo);
 
@@ -120,6 +124,16 @@ export default function Obras() {
               </option>
             ))}
           </select>
+
+          <label className="flex items-center gap-2 rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-700">
+            <input
+              type="checkbox"
+              checked={mostrarArchivadas}
+              onChange={(e) => setMostrarArchivadas(e.target.checked)}
+              className="h-4 w-4 rounded border-zinc-300"
+            />
+            Mostrar archivadas
+          </label>
         </div>
 
         {cargando && <p className="mt-6 text-zinc-600">Cargando...</p>}
@@ -155,6 +169,11 @@ export default function Obras() {
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
+                    {o.archivada && (
+                      <span className="rounded-full bg-zinc-200 px-2 py-0.5 text-xs font-medium text-zinc-600">
+                        Archivada
+                      </span>
+                    )}
                     <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-700">
                       {tiposObra.find((t) => t.id === o.tipo_obra_id)?.nombre ?? "—"}
                     </span>
