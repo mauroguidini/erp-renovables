@@ -20,6 +20,7 @@ function OtCard({
   hitos,
   puedeGestionar,
   puedeMarcarEstado,
+  esAdmin,
   onCambiarEstado,
   onCambiarMotivo,
   onGuardarDetalle,
@@ -27,6 +28,7 @@ function OtCard({
   onCambiarHito,
 }) {
   const nombreResponsable = ot.empleados?.nombre ?? ot.responsable;
+  const otCerrada = ot.estado === "cumplida" && !esAdmin;
 
   return (
     <div className="rounded-md border border-zinc-200 p-4">
@@ -47,7 +49,22 @@ function OtCard({
       </p>
       <p className="mt-0.5 text-xs text-zinc-400">Creado por: {ot.creado_por}</p>
 
-      {puedeGestionar && (
+      {otCerrada && (
+        <div className="mt-2 rounded-md bg-green-50 p-3 text-sm text-green-800">
+          <p className="font-medium">Esta OT está cumplida y cerrada.</p>
+          <p className="mt-0.5 text-xs">
+            {ot.cumplidaPor
+              ? `Marcada por ${ot.cumplidaPor.email} el ${new Date(
+                  ot.cumplidaPor.fecha
+                ).toLocaleString()}. `
+              : ""}
+            Solo un administrador puede reabrirla o modificarla — pedíselo por fuera del
+            sistema.
+          </p>
+        </div>
+      )}
+
+      {puedeGestionar && !otCerrada && (
         <div className="mt-2 flex flex-wrap gap-3">
           <div>
             <label className="block text-xs font-medium text-zinc-500">
@@ -89,7 +106,7 @@ function OtCard({
         </div>
       )}
 
-      {puedeMarcarEstado ? (
+      {puedeMarcarEstado && !otCerrada ? (
         <div className="mt-3 flex flex-wrap gap-2">
           {ESTADOS.map((e) => {
             const activo = ot.estado === e.value;
@@ -121,7 +138,7 @@ function OtCard({
       {ot.estado === "no_cumplida" && (
         <div className="mt-3 rounded-md bg-accent/10 p-3">
           <label className="block text-xs font-medium text-accent">Motivo</label>
-          {puedeMarcarEstado ? (
+          {puedeMarcarEstado && !otCerrada ? (
             <>
               <select
                 value={ot.motivo_incumplimiento ?? ""}
@@ -212,6 +229,7 @@ function GrupoHito({ hito, ots, ...cardProps }) {
 
 export default function OrdenesTrabajo({ obraId, hitos, onHitosCambio }) {
   const role = useRole();
+  const esAdmin = role === "administrador";
   const puedeGestionar = role === "administrador" || role === "jefe_obra";
   const puedeMarcarEstado =
     role === "administrador" || role === "capataz" || role === "jefe_obra";
@@ -236,10 +254,34 @@ export default function OrdenesTrabajo({ obraId, hitos, onHitosCambio }) {
 
     if (error) {
       setError(error.message);
-    } else {
-      setError(null);
-      setOts(data);
+      setCargando(false);
+      return;
     }
+
+    setError(null);
+
+    const idsCumplidas = (data ?? []).filter((o) => o.estado === "cumplida").map((o) => o.id);
+    if (idsCumplidas.length === 0) {
+      setOts(data);
+      setCargando(false);
+      return;
+    }
+
+    const { data: historial } = await supabase
+      .from("ot_historial_estados")
+      .select("ot_id, usuario_email, created_at")
+      .eq("estado", "cumplida")
+      .in("ot_id", idsCumplidas)
+      .order("created_at", { ascending: false });
+
+    const cumplidaPorId = {};
+    (historial ?? []).forEach((h) => {
+      if (!cumplidaPorId[h.ot_id]) {
+        cumplidaPorId[h.ot_id] = { email: h.usuario_email, fecha: h.created_at };
+      }
+    });
+
+    setOts(data.map((o) => ({ ...o, cumplidaPor: cumplidaPorId[o.id] ?? null })));
     setCargando(false);
   }, [obraId]);
 
@@ -393,6 +435,7 @@ export default function OrdenesTrabajo({ obraId, hitos, onHitosCambio }) {
     hitos,
     puedeGestionar,
     puedeMarcarEstado,
+    esAdmin,
     onCambiarEstado: handleCambiarEstado,
     onCambiarMotivo: handleCambiarMotivo,
     onGuardarDetalle: handleGuardarDetalle,

@@ -16,6 +16,7 @@ const ESTADO_SELECT_COLOR = {
 
 export default function PanelOt() {
   const role = useRole();
+  const esAdmin = role === "administrador";
   const puedeGestionar = role === "administrador" || role === "jefe_obra";
   const puedeMarcarEstado =
     role === "administrador" || role === "capataz" || role === "jefe_obra";
@@ -45,10 +46,34 @@ export default function PanelOt() {
 
     if (error) {
       setError(error.message);
-    } else {
-      setError(null);
-      setOts(data);
+      setCargando(false);
+      return;
     }
+
+    setError(null);
+
+    const idsCumplidas = (data ?? []).filter((o) => o.estado === "cumplida").map((o) => o.id);
+    if (idsCumplidas.length === 0) {
+      setOts(data);
+      setCargando(false);
+      return;
+    }
+
+    const { data: historial } = await supabase
+      .from("ot_historial_estados")
+      .select("ot_id, usuario_email, created_at")
+      .eq("estado", "cumplida")
+      .in("ot_id", idsCumplidas)
+      .order("created_at", { ascending: false });
+
+    const cumplidaPorId = {};
+    (historial ?? []).forEach((h) => {
+      if (!cumplidaPorId[h.ot_id]) {
+        cumplidaPorId[h.ot_id] = { email: h.usuario_email, fecha: h.created_at };
+      }
+    });
+
+    setOts(data.map((o) => ({ ...o, cumplidaPor: cumplidaPorId[o.id] ?? null })));
     setCargando(false);
   }, []);
 
@@ -277,6 +302,7 @@ export default function PanelOt() {
               <tbody className="divide-y divide-zinc-200">
                 {otsFiltradas.map((ot) => {
                   const nombreResponsable = ot.empleados?.nombre ?? ot.responsable;
+                  const otCerrada = ot.estado === "cumplida" && !esAdmin;
                   return (
                     <tr key={ot.id}>
                       <td className="px-4 py-3 text-zinc-900">
@@ -294,7 +320,7 @@ export default function PanelOt() {
                         {ot.descripcion}
                       </td>
                       <td className="px-4 py-3 text-zinc-900">
-                        {puedeGestionar ? (
+                        {puedeGestionar && !otCerrada ? (
                           <select
                             value={ot.responsable_id ?? ""}
                             onChange={(e) =>
@@ -332,7 +358,7 @@ export default function PanelOt() {
                         </span>
                       </td>
                       <td className="px-4 py-3">
-                        {puedeMarcarEstado ? (
+                        {puedeMarcarEstado && !otCerrada ? (
                           <select
                             value={ot.estado}
                             onChange={(e) =>
@@ -357,6 +383,18 @@ export default function PanelOt() {
                             {ESTADOS.find((e) => e.value === ot.estado)?.label ??
                               ot.estado}
                           </span>
+                        )}
+
+                        {otCerrada && (
+                          <p className="mt-1 text-xs text-zinc-500">
+                            Cerrada
+                            {ot.cumplidaPor
+                              ? ` por ${ot.cumplidaPor.email} el ${new Date(
+                                  ot.cumplidaPor.fecha
+                                ).toLocaleDateString()}`
+                              : ""}
+                            . Solo admin puede reabrirla.
+                          </p>
                         )}
 
                         {ot.estado === "no_cumplida" && (
