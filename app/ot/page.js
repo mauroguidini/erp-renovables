@@ -14,6 +14,13 @@ const ESTADO_SELECT_COLOR = {
   no_cumplida: "bg-accent text-white",
 };
 
+// Igual criterio que en el detalle de obra: "vencida" no se guarda en
+// ningún lado, se calcula al vuelo cada vez que se muestra.
+function esOtVencida(ot) {
+  const hoy = new Date().toISOString().slice(0, 10);
+  return (ot.estado === "pendiente" || ot.estado === "parcial") && ot.fecha_limite < hoy;
+}
+
 export default function PanelOt() {
   const role = useRole();
   const esAdmin = role === "administrador";
@@ -207,6 +214,20 @@ export default function PanelOt() {
     }
   }
 
+  async function handleReprogramar(ot, nuevaFecha) {
+    actualizarOtLocal(ot.id, { fecha_limite: nuevaFecha });
+
+    const { error } = await supabase
+      .from("ordenes_trabajo")
+      .update({ fecha_limite: nuevaFecha })
+      .eq("id", ot.id);
+
+    if (error) {
+      setError(error.message);
+      cargarOts();
+    }
+  }
+
   return (
     <div className="min-h-screen bg-zinc-50 p-8 font-sans">
       <div className="mx-auto max-w-6xl">
@@ -303,6 +324,7 @@ export default function PanelOt() {
                 {otsFiltradas.map((ot) => {
                   const nombreResponsable = ot.empleados?.nombre ?? ot.responsable;
                   const otCerrada = ot.estado === "cumplida" && !esAdmin;
+                  const vencida = esOtVencida(ot);
                   return (
                     <tr key={ot.id}>
                       <td className="px-4 py-3 text-zinc-900">
@@ -344,7 +366,37 @@ export default function PanelOt() {
                         )}
                       </td>
                       <td className="px-4 py-3 text-zinc-900">
-                        {ot.fecha_limite}
+                        <span className={vencida ? "font-medium text-accent" : ""}>
+                          {ot.fecha_limite}
+                        </span>
+                        {vencida && (
+                          <span className="ml-2 rounded-full bg-accent px-2 py-0.5 text-xs font-medium text-white">
+                            Vencida
+                          </span>
+                        )}
+                        {vencida && puedeGestionar && !otCerrada && (
+                          <form
+                            onSubmit={(e) => {
+                              e.preventDefault();
+                              handleReprogramar(ot, e.target.elements.nuevaFecha.value);
+                            }}
+                            className="mt-1 flex items-center gap-1"
+                          >
+                            <input
+                              required
+                              type="date"
+                              name="nuevaFecha"
+                              defaultValue={ot.fecha_limite}
+                              className="rounded-md border border-accent/50 bg-white px-1 py-0.5 text-xs text-zinc-900"
+                            />
+                            <button
+                              type="submit"
+                              className="rounded-md bg-accent px-2 py-0.5 text-xs font-medium text-white hover:bg-accent/90"
+                            >
+                              Reprogramar
+                            </button>
+                          </form>
+                        )}
                       </td>
                       <td className="px-4 py-3">
                         <span

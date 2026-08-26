@@ -14,6 +14,14 @@ const valoresIniciales = {
   fecha_limite: new Date().toISOString().slice(0, 10),
 };
 
+// "Vencida" nunca se guarda en ningún lado — se calcula al vuelo cada vez
+// que se muestra. Una OT pendiente o parcial cuya fecha límite ya pasó.
+// No cumplida/no_cumplida no cuentan (ya están cerradas de una forma u otra).
+function esOtVencida(ot) {
+  const hoy = new Date().toISOString().slice(0, 10);
+  return (ot.estado === "pendiente" || ot.estado === "parcial") && ot.fecha_limite < hoy;
+}
+
 function OtCard({
   ot,
   empleados,
@@ -26,28 +34,71 @@ function OtCard({
   onGuardarDetalle,
   onCambiarResponsable,
   onCambiarHito,
+  onReprogramar,
 }) {
+  const [nuevaFecha, setNuevaFecha] = useState(ot.fecha_limite);
   const nombreResponsable = ot.empleados?.nombre ?? ot.responsable;
   const otCerrada = ot.estado === "cumplida" && !esAdmin;
+  const vencida = esOtVencida(ot);
 
   return (
-    <div className="rounded-md border border-zinc-200 p-4">
+    <div
+      className={`rounded-md border p-4 ${
+        vencida ? "border-accent bg-accent/5" : "border-zinc-200"
+      }`}
+    >
       <div className="flex items-start justify-between gap-2">
         <p className="text-sm font-medium text-zinc-900">{ot.descripcion}</p>
-        <span
-          className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${
-            TIPOS.find((t) => t.value === ot.tipo)?.color ?? "bg-zinc-100 text-zinc-700"
-          }`}
-        >
-          {TIPOS.find((t) => t.value === ot.tipo)?.label ?? ot.tipo}
-        </span>
+        <div className="flex shrink-0 gap-1">
+          {vencida && (
+            <span className="rounded-full bg-accent px-2 py-0.5 text-xs font-medium text-white">
+              Vencida
+            </span>
+          )}
+          <span
+            className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+              TIPOS.find((t) => t.value === ot.tipo)?.color ?? "bg-zinc-100 text-zinc-700"
+            }`}
+          >
+            {TIPOS.find((t) => t.value === ot.tipo)?.label ?? ot.tipo}
+          </span>
+        </div>
       </div>
-      <p className="mt-1 text-xs text-zinc-500">
+      <p className={`mt-1 text-xs ${vencida ? "font-medium text-accent" : "text-zinc-500"}`}>
         {ot.fecha_inicio ? `Desde: ${ot.fecha_inicio} · ` : ""}
         Vence: {ot.fecha_limite}
         {!puedeGestionar && nombreResponsable ? ` · ${nombreResponsable}` : ""}
       </p>
       <p className="mt-0.5 text-xs text-zinc-400">Creado por: {ot.creado_por}</p>
+
+      {vencida && puedeGestionar && !otCerrada && (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            onReprogramar(ot, nuevaFecha);
+          }}
+          className="mt-2 flex flex-wrap items-end gap-2 rounded-md bg-accent/10 p-2"
+        >
+          <div>
+            <label className="block text-xs font-medium text-accent">
+              Reprogramar a
+            </label>
+            <input
+              required
+              type="date"
+              value={nuevaFecha}
+              onChange={(e) => setNuevaFecha(e.target.value)}
+              className="mt-1 rounded-md border border-accent/50 bg-white px-2 py-1 text-sm text-zinc-900"
+            />
+          </div>
+          <button
+            type="submit"
+            className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-white hover:bg-accent/90"
+          >
+            Reprogramar
+          </button>
+        </form>
+      )}
 
       {otCerrada && (
         <div className="mt-2 rounded-md bg-green-50 p-3 text-sm text-green-800">
@@ -403,6 +454,22 @@ export default function OrdenesTrabajo({ obraId, hitos, onHitosCambio }) {
     }
   }
 
+  async function handleReprogramar(ot, nuevaFecha) {
+    setOts((prev) =>
+      prev.map((o) => (o.id === ot.id ? { ...o, fecha_limite: nuevaFecha } : o))
+    );
+
+    const { error } = await supabase
+      .from("ordenes_trabajo")
+      .update({ fecha_limite: nuevaFecha })
+      .eq("id", ot.id);
+
+    if (error) {
+      setError(error.message);
+      cargarOts();
+    }
+  }
+
   async function handleCrearOt(e) {
     e.preventDefault();
     setGuardando(true);
@@ -441,6 +508,7 @@ export default function OrdenesTrabajo({ obraId, hitos, onHitosCambio }) {
     onGuardarDetalle: handleGuardarDetalle,
     onCambiarResponsable: handleCambiarResponsable,
     onCambiarHito: handleCambiarHito,
+    onReprogramar: handleReprogramar,
   };
 
   const grupos =
