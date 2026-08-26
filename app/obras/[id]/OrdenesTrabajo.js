@@ -225,6 +225,84 @@ function OtCard({
           )}
         </div>
       )}
+
+      <HistorialOt otId={ot.id} />
+    </div>
+  );
+}
+
+function HistorialOt({ otId }) {
+  const [abierto, setAbierto] = useState(false);
+  const [cargando, setCargando] = useState(false);
+  const [eventos, setEventos] = useState(null);
+
+  async function handleToggle() {
+    if (abierto) {
+      setAbierto(false);
+      return;
+    }
+    setAbierto(true);
+    if (eventos !== null) return;
+
+    setCargando(true);
+    const [estadosRes, fechasRes] = await Promise.all([
+      supabase
+        .from("ot_historial_estados")
+        .select("estado, usuario_email, created_at")
+        .eq("ot_id", otId),
+      supabase
+        .from("ot_historial_fechas")
+        .select("fecha_limite_anterior, fecha_limite_nueva, usuario_email, created_at")
+        .eq("ot_id", otId),
+    ]);
+
+    const lista = [
+      ...(estadosRes.data ?? []).map((e) => ({
+        fecha: e.created_at,
+        usuario: e.usuario_email,
+        texto: `Estado cambiado a "${ESTADOS.find((x) => x.value === e.estado)?.label ?? e.estado}"`,
+      })),
+      ...(fechasRes.data ?? []).map((f) => ({
+        fecha: f.created_at,
+        usuario: f.usuario_email,
+        texto: `Fecha límite: ${f.fecha_limite_anterior ?? "(sin fecha)"} → ${f.fecha_limite_nueva}`,
+      })),
+    ].sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
+
+    setEventos(lista);
+    setCargando(false);
+  }
+
+  return (
+    <div className="mt-2">
+      <button
+        type="button"
+        onClick={handleToggle}
+        className="text-xs font-medium text-zinc-500 hover:text-primary hover:underline"
+      >
+        {abierto ? "Ocultar historial" : "Ver historial"}
+      </button>
+
+      {abierto && (
+        <div className="mt-1 rounded-md bg-zinc-50 p-2">
+          {cargando && <p className="text-xs text-zinc-500">Cargando...</p>}
+          {eventos && eventos.length === 0 && (
+            <p className="text-xs text-zinc-500">Todavía no tiene cambios registrados.</p>
+          )}
+          {eventos && eventos.length > 0 && (
+            <ul className="space-y-1">
+              {eventos.map((ev, i) => (
+                <li key={i} className="text-xs text-zinc-600">
+                  <span className="text-zinc-400">
+                    {new Date(ev.fecha).toLocaleString()}
+                  </span>{" "}
+                  — {ev.texto} ({ev.usuario ?? "desconocido"})
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
     </div>
   );
 }
