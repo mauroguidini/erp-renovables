@@ -313,10 +313,14 @@ function GrupoHito({ hito, ots, ...cardProps }) {
   const porcentaje = total > 0 ? Math.round((cumplidas / total) * 100) : 0;
 
   return (
-    <div className="mt-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h3 className="text-sm font-semibold text-primary">
+    <div
+      className={`mt-4 rounded-lg border p-3 ${
+        hito ? "border-zinc-200 bg-zinc-50" : "border-dashed border-zinc-300"
+      }`}
+    >
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <h3 className="break-words text-sm font-semibold text-primary">
             {hito ? hito.nombre : "Sin hito"}
           </h3>
           {hito && (
@@ -333,9 +337,9 @@ function GrupoHito({ hito, ots, ...cardProps }) {
           )}
         </div>
         {hito && (
-          <div className="w-32 shrink-0 text-right">
+          <div className="sm:w-36 sm:shrink-0 sm:text-right">
             <span className="text-xs font-medium text-zinc-600">
-              {cumplidas}/{total} · {porcentaje}%
+              {cumplidas}/{total} cumplidas · {porcentaje}%
             </span>
             <div className="mt-1 h-1.5 w-full rounded-full bg-zinc-200">
               <div
@@ -347,7 +351,7 @@ function GrupoHito({ hito, ots, ...cardProps }) {
         )}
       </div>
 
-      <div className="mt-2 space-y-3">
+      <div className="mt-3 space-y-3">
         {ots.map((ot) => (
           <OtCard key={ot.id} ot={ot} {...cardProps} />
         ))}
@@ -748,7 +752,7 @@ export default function OrdenesTrabajo({ obraId, hitos, onHitosCambio }) {
       )}
 
       {!cargando && grupos !== null && (
-        <div className="divide-y divide-zinc-100">
+        <div>
           {grupos.map((grupo) => (
             <GrupoHito
               key={grupo.hito?.id ?? "sin-hito"}
