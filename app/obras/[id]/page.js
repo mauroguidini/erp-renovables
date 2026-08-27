@@ -10,6 +10,8 @@ import Hitos from "./Hitos";
 import ArchivosObra from "./ArchivosObra";
 import EstadoObraConsulta from "./EstadoObraConsulta";
 import ZonaPeligrosaObra from "./ZonaPeligrosaObra";
+import ResumenOt from "./ResumenOt";
+import ParteAsistencia from "./ParteAsistencia";
 
 const ESTADOS = [
   "presupuestada",
@@ -265,6 +267,8 @@ function DetalleObraCompleto({ id, role }) {
           </p>
         )}
 
+        <ResumenOt obraId={id} />
+
         {!editando && (
           <>
             <div className="mt-6 rounded-lg border border-zinc-200 bg-white p-5">
@@ -457,6 +461,8 @@ function DetalleObraCompleto({ id, role }) {
         <RemitosObra obraId={id} />
 
         <Hitos obraId={id} hitos={hitos} onCambio={cargarHitos} />
+
+        <ParteAsistencia obraId={id} />
 
         <OrdenesTrabajo obraId={id} hitos={hitos} onHitosCambio={cargarHitos} />
 
