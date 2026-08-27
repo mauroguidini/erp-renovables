@@ -1,7 +1,7 @@
 export const ESTADOS = [
   { value: "pendiente", label: "Pendiente", activo: "bg-zinc-600 text-white" },
   { value: "cumplida", label: "Cumplida", activo: "bg-green-600 text-white" },
-  { value: "parcial", label: "Parcial", activo: "bg-yellow-500 text-white" },
+  { value: "parcial", label: "Iniciada", activo: "bg-yellow-500 text-white" },
   { value: "no_cumplida", label: "No cumplida", activo: "bg-accent text-white" },
 ];
 
