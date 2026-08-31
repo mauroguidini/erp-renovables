@@ -40,17 +40,19 @@ export default function ResumenOt({ obraId }) {
   const iniciadas = contar((o) => o.estado === "parcial");
   const cumplidas = contar((o) => o.estado === "cumplida");
   const noCumplidas = contar((o) => o.estado === "no_cumplida");
+  const reemplazadas = contar((o) => o.estado === "reemplazada");
   const vencidas = contar(
     (o) => (o.estado === "pendiente" || o.estado === "parcial") && o.fecha_limite < hoy
   );
 
   return (
-    <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+    <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-7">
       <Tile label="Total OT" valor={total} colorTexto="text-primary" />
       <Tile label="Por iniciar" valor={porIniciar} colorTexto="text-zinc-600" />
       <Tile label="Iniciadas" valor={iniciadas} colorTexto="text-yellow-600" />
       <Tile label="Cumplidas" valor={cumplidas} colorTexto="text-green-600" />
       <Tile label="No cumplidas" valor={noCumplidas} colorTexto="text-accent" />
+      <Tile label="Reemplazadas" valor={reemplazadas} colorTexto="text-zinc-500" />
       <Tile label="Vencidas" valor={vencidas} colorTexto="text-accent" resaltado />
     </div>
   );

@@ -312,6 +312,7 @@ export default function PanelOt() {
             <table className="w-full min-w-[900px] text-sm">
               <thead>
                 <tr className="border-b border-zinc-200 text-left text-zinc-500">
+                  <th className="px-4 py-2 font-medium">N°</th>
                   <th className="px-4 py-2 font-medium">Obra</th>
                   <th className="px-4 py-2 font-medium">Descripción</th>
                   <th className="px-4 py-2 font-medium">Responsable</th>
@@ -323,10 +324,12 @@ export default function PanelOt() {
               <tbody className="divide-y divide-zinc-200">
                 {otsFiltradas.map((ot) => {
                   const nombreResponsable = ot.empleados?.nombre ?? ot.responsable;
-                  const otCerrada = ot.estado === "cumplida" && !esAdmin;
+                  const otCerrada =
+                    (ot.estado === "cumplida" || ot.estado === "reemplazada") && !esAdmin;
                   const vencida = esOtVencida(ot);
                   return (
                     <tr key={ot.id}>
+                      <td className="px-4 py-3 text-zinc-400">#{ot.numero}</td>
                       <td className="px-4 py-3 text-zinc-900">
                         <Link
                           href={`/obras/${ot.obras?.id}`}
@@ -410,14 +413,14 @@ export default function PanelOt() {
                         </span>
                       </td>
                       <td className="px-4 py-3">
-                        {puedeMarcarEstado && !otCerrada ? (
+                        {puedeMarcarEstado && !otCerrada && ot.estado !== "reemplazada" ? (
                           <select
                             value={ot.estado}
                             onChange={(e) =>
                               handleCambiarEstado(ot, e.target.value)
                             }
                             className={`rounded-full border-0 px-3 py-1.5 text-xs font-medium ${
-                              ESTADO_SELECT_COLOR[ot.estado]
+                              ESTADO_SELECT_COLOR[ot.estado] ?? "bg-zinc-100 text-zinc-700"
                             }`}
                           >
                             {ESTADOS.map((e) => (
@@ -429,15 +432,15 @@ export default function PanelOt() {
                         ) : (
                           <span
                             className={`rounded-full px-3 py-1.5 text-xs font-medium ${
-                              ESTADO_SELECT_COLOR[ot.estado]
+                              ESTADO_SELECT_COLOR[ot.estado] ?? "bg-zinc-100 text-zinc-700"
                             }`}
                           >
                             {ESTADOS.find((e) => e.value === ot.estado)?.label ??
-                              ot.estado}
+                              (ot.estado === "reemplazada" ? "Reemplazada" : ot.estado)}
                           </span>
                         )}
 
-                        {otCerrada && (
+                        {otCerrada && ot.estado === "cumplida" && (
                           <p className="mt-1 text-xs text-zinc-500">
                             Cerrada
                             {ot.cumplidaPor
@@ -446,6 +449,12 @@ export default function PanelOt() {
                                 ).toLocaleDateString()}`
                               : ""}
                             . Solo admin puede reabrirla.
+                          </p>
+                        )}
+
+                        {ot.estado === "reemplazada" && (
+                          <p className="mt-1 text-xs text-zinc-500">
+                            Reemplazada. Ver detalle en la obra para más información.
                           </p>
                         )}
 

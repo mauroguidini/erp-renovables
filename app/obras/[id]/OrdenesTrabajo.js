@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { ESTADOS, MOTIVOS, TIPOS } from "../../otConstants";
 import { useRole } from "../../RoleContext";
@@ -12,6 +12,7 @@ const valoresIniciales = {
   hito_id: "",
   fecha_inicio: "",
   fecha_limite: new Date().toISOString().slice(0, 10),
+  reemplaza_a_id: "",
 };
 
 // "Vencida" nunca se guarda en ningún lado — se calcula al vuelo cada vez
@@ -22,8 +23,110 @@ function esOtVencida(ot) {
   return (ot.estado === "pendiente" || ot.estado === "parcial") && ot.fecha_limite < hoy;
 }
 
+function EvidenciaOt({ obraId, otId }) {
+  const inputRef = useRef(null);
+  const ruta = `${obraId}/ot-evidencias/${otId}`;
+
+  const [fotos, setFotos] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  const [subiendo, setSubiendo] = useState(false);
+  const [error, setError] = useState(null);
+
+  const cargar = useCallback(async () => {
+    setCargando(true);
+    const { data, error } = await supabase.storage.from("obras-archivos").list(ruta, {
+      sortBy: { column: "created_at", order: "desc" },
+    });
+    if (error) {
+      setError(error.message);
+    } else {
+      setError(null);
+      setFotos(data ?? []);
+    }
+    setCargando(false);
+  }, [ruta]);
+
+  useEffect(() => {
+    cargar();
+  }, [cargar]);
+
+  async function handleSubir(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setSubiendo(true);
+    setError(null);
+
+    const { error } = await supabase.storage
+      .from("obras-archivos")
+      .upload(`${ruta}/${crypto.randomUUID()}-${file.name}`, file);
+
+    if (error) {
+      setError(error.message);
+    } else {
+      await cargar();
+    }
+    setSubiendo(false);
+    if (inputRef.current) inputRef.current.value = "";
+  }
+
+  async function handleVer(foto) {
+    const { data, error } = await supabase.storage
+      .from("obras-archivos")
+      .createSignedUrl(`${ruta}/${foto.name}`, 60);
+
+    if (error) {
+      setError(error.message);
+      return;
+    }
+    window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+  }
+
+  return (
+    <div className="mt-2 rounded-md border border-zinc-200 p-2">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs font-medium text-zinc-500">
+          Evidencia fotográfica{fotos.length > 0 ? ` (${fotos.length})` : ""}
+        </span>
+        <label className="cursor-pointer text-xs font-medium text-primary hover:underline">
+          {subiendo ? "Subiendo..." : "+ Agregar foto"}
+          <input
+            ref={inputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            onChange={handleSubir}
+            disabled={subiendo}
+            className="hidden"
+          />
+        </label>
+      </div>
+
+      {error && <p className="mt-1 text-xs text-accent">{error}</p>}
+
+      {!cargando && fotos.length > 0 && (
+        <ul className="mt-1 flex flex-wrap gap-2">
+          {fotos.map((foto) => (
+            <li key={foto.id ?? foto.name}>
+              <button
+                type="button"
+                onClick={() => handleVer(foto)}
+                className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-primary hover:underline"
+              >
+                Ver foto
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 function OtCard({
   ot,
+  todasLasOts,
+  obraId,
   empleados,
   hitos,
   puedeGestionar,
@@ -35,11 +138,27 @@ function OtCard({
   onCambiarResponsable,
   onCambiarHito,
   onReprogramar,
+  onReemplazar,
 }) {
   const [nuevaFecha, setNuevaFecha] = useState(ot.fecha_limite);
   const nombreResponsable = ot.empleados?.nombre ?? ot.responsable;
-  const otCerrada = ot.estado === "cumplida" && !esAdmin;
+  const otCerrada = (ot.estado === "cumplida" || ot.estado === "reemplazada") && !esAdmin;
   const vencida = esOtVencida(ot);
+
+  const reemplazaA = ot.reemplaza_a_id
+    ? todasLasOts.find((o) => o.id === ot.reemplaza_a_id)
+    : null;
+  const reemplazadaPor = todasLasOts.find((o) => o.reemplaza_a_id === ot.id) ?? null;
+  const idsYaReemplazados = new Set(
+    todasLasOts.filter((o) => o.reemplaza_a_id).map((o) => o.reemplaza_a_id)
+  );
+  const opcionesReemplazo = todasLasOts.filter(
+    (o) =>
+      o.id !== ot.id &&
+      o.estado !== "cumplida" &&
+      o.estado !== "reemplazada" &&
+      !idsYaReemplazados.has(o.id)
+  );
 
   return (
     <div
@@ -48,7 +167,9 @@ function OtCard({
       }`}
     >
       <div className="flex items-start justify-between gap-2">
-        <p className="text-sm font-medium text-zinc-900">{ot.descripcion}</p>
+        <p className="text-sm font-medium text-zinc-900">
+          <span className="text-zinc-400">#{ot.numero}</span> {ot.descripcion}
+        </p>
         <div className="flex shrink-0 gap-1">
           {vencida && (
             <span className="rounded-full bg-accent px-2 py-0.5 text-xs font-medium text-white">
@@ -100,7 +221,7 @@ function OtCard({
         </form>
       )}
 
-      {otCerrada && (
+      {otCerrada && ot.estado === "cumplida" && (
         <div className="mt-2 rounded-md bg-green-50 p-3 text-sm text-green-800">
           <p className="font-medium">Esta OT está cumplida y cerrada.</p>
           <p className="mt-0.5 text-xs">
@@ -113,6 +234,54 @@ function OtCard({
             sistema.
           </p>
         </div>
+      )}
+
+      {ot.estado === "reemplazada" && (
+        <div className="mt-2 rounded-md bg-zinc-100 p-3 text-sm text-zinc-700">
+          <p className="font-medium">Esta OT fue reemplazada.</p>
+          <p className="mt-0.5 text-xs">
+            {reemplazadaPor
+              ? `Reemplazada por la OT #${reemplazadaPor.numero} — ${reemplazadaPor.descripcion}. `
+              : ""}
+            {!esAdmin && "Solo un administrador puede modificarla — pedíselo por fuera del sistema."}
+          </p>
+        </div>
+      )}
+
+      {reemplazaA && (
+        <p className="mt-1 text-xs text-zinc-500">
+          Reemplaza a la OT #{reemplazaA.numero} — {reemplazaA.descripcion}
+        </p>
+      )}
+
+      {puedeMarcarEstado &&
+        !otCerrada &&
+        ot.estado !== "reemplazada" &&
+        !ot.reemplaza_a_id &&
+        opcionesReemplazo.length > 0 && (
+          <div className="mt-2">
+            <select
+              defaultValue=""
+              onChange={(e) => {
+                if (e.target.value) onReemplazar(ot, e.target.value);
+                e.target.value = "";
+              }}
+              className="rounded-md border border-zinc-300 bg-white px-2 py-1 text-xs text-zinc-700"
+            >
+              <option value="" disabled>
+                ¿Reemplaza a otra OT?
+              </option>
+              {opcionesReemplazo.map((o) => (
+                <option key={o.id} value={o.id}>
+                  OT #{o.numero} — {o.descripcion.slice(0, 40)}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
+      {ot.estado === "cumplida" && puedeMarcarEstado && (
+        <EvidenciaOt obraId={obraId} otId={ot.id} />
       )}
 
       {puedeGestionar && !otCerrada && (
@@ -181,7 +350,8 @@ function OtCard({
               ESTADOS.find((e) => e.value === ot.estado)?.activo ?? "bg-zinc-100 text-zinc-700"
             }`}
           >
-            {ESTADOS.find((e) => e.value === ot.estado)?.label ?? ot.estado}
+            {ESTADOS.find((e) => e.value === ot.estado)?.label ??
+              (ot.estado === "reemplazada" ? "Reemplazada" : ot.estado)}
           </span>
         </div>
       )}
@@ -552,6 +722,19 @@ export default function OrdenesTrabajo({ obraId, hitos, onHitosCambio }) {
     }
   }
 
+  async function handleReemplazar(otNueva, otAnteriorId) {
+    const { error } = await supabase.rpc("reemplazar_ot", {
+      p_ot_anterior_id: otAnteriorId,
+      p_ot_nueva_id: otNueva.id,
+    });
+
+    if (error) {
+      setError(error.message);
+    } else {
+      await cargarOts();
+    }
+  }
+
   async function handleCrearOt(e) {
     e.preventDefault();
     setGuardando(true);
@@ -559,27 +742,55 @@ export default function OrdenesTrabajo({ obraId, hitos, onHitosCambio }) {
 
     const { data: sesion } = await supabase.auth.getSession();
 
-    const { error } = await supabase.from("ordenes_trabajo").insert({
-      obra_id: obraId,
-      descripcion: form.descripcion.trim(),
-      responsable_id: form.responsable_id || null,
-      hito_id: form.hito_id || null,
-      fecha_inicio: form.fecha_inicio || null,
-      fecha_limite: form.fecha_limite,
-      creado_por: sesion.session?.user?.email ?? "desconocido",
-    });
+    const { data: otCreada, error } = await supabase
+      .from("ordenes_trabajo")
+      .insert({
+        obra_id: obraId,
+        descripcion: form.descripcion.trim(),
+        responsable_id: form.responsable_id || null,
+        hito_id: form.hito_id || null,
+        fecha_inicio: form.fecha_inicio || null,
+        fecha_limite: form.fecha_limite,
+        creado_por: sesion.session?.user?.email ?? "desconocido",
+      })
+      .select("id")
+      .single();
 
     if (error) {
       setErrorForm(error.message);
-    } else {
-      setForm(valoresIniciales);
-      setMostrarForm(false);
-      await cargarOts();
+      setGuardando(false);
+      return;
     }
+
+    if (form.reemplaza_a_id) {
+      const { error: errorReemplazo } = await supabase.rpc("reemplazar_ot", {
+        p_ot_anterior_id: form.reemplaza_a_id,
+        p_ot_nueva_id: otCreada.id,
+      });
+      if (errorReemplazo) {
+        setErrorForm(`La OT se creó, pero no se pudo marcar el reemplazo: ${errorReemplazo.message}`);
+        setGuardando(false);
+        await cargarOts();
+        return;
+      }
+    }
+
+    setForm(valoresIniciales);
+    setMostrarForm(false);
+    await cargarOts();
     setGuardando(false);
   }
 
+  const idsYaReemplazados = new Set(
+    ots.filter((o) => o.reemplaza_a_id).map((o) => o.reemplaza_a_id)
+  );
+  const opcionesReemplazoNuevaOt = ots.filter(
+    (o) => o.estado !== "cumplida" && o.estado !== "reemplazada" && !idsYaReemplazados.has(o.id)
+  );
+
   const cardProps = {
+    todasLasOts: ots,
+    obraId,
     empleados,
     hitos,
     puedeGestionar,
@@ -591,6 +802,7 @@ export default function OrdenesTrabajo({ obraId, hitos, onHitosCambio }) {
     onCambiarResponsable: handleCambiarResponsable,
     onCambiarHito: handleCambiarHito,
     onReprogramar: handleReprogramar,
+    onReemplazar: handleReemplazar,
   };
 
   const grupos =
@@ -717,6 +929,27 @@ export default function OrdenesTrabajo({ obraId, hitos, onHitosCambio }) {
                 className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
               />
             </div>
+            {opcionesReemplazoNuevaOt.length > 0 && (
+              <div className="sm:col-span-2">
+                <label className="block text-sm font-medium text-zinc-700">
+                  ¿Reemplaza a otra OT?
+                </label>
+                <select
+                  value={form.reemplaza_a_id}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, reemplaza_a_id: e.target.value }))
+                  }
+                  className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
+                >
+                  <option value="">— No reemplaza a ninguna —</option>
+                  {opcionesReemplazoNuevaOt.map((o) => (
+                    <option key={o.id} value={o.id}>
+                      OT #{o.numero} — {o.descripcion.slice(0, 60)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
 
           {errorForm && (
