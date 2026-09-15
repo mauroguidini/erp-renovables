@@ -12,6 +12,7 @@ import EstadoObraConsulta from "./EstadoObraConsulta";
 import ZonaPeligrosaObra from "./ZonaPeligrosaObra";
 import ResumenOt from "./ResumenOt";
 import ParteAsistencia from "./ParteAsistencia";
+import TrabajoDiario from "./TrabajoDiario";
 
 const ESTADOS = [
   "presupuestada",
@@ -463,6 +464,8 @@ function DetalleObraCompleto({ id, role }) {
         <Hitos obraId={id} hitos={hitos} onCambio={cargarHitos} />
 
         <ParteAsistencia obraId={id} />
+
+        <TrabajoDiario obraId={id} />
 
         <OrdenesTrabajo obraId={id} hitos={hitos} onHitosCambio={cargarHitos} />
 
