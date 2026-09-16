@@ -62,10 +62,13 @@ const GRUPOS = [
     ],
   },
   {
-    label: "Caja",
+    label: "Finanzas",
     Icon: Wallet,
     roles: ["administrador", "administracion"],
-    links: [{ href: "/caja", label: "Caja de efectivo" }],
+    links: [
+      { href: "/caja", label: "Caja de efectivo" },
+      { href: "/facturas-compra", label: "Facturas de compra" },
+    ],
   },
   {
     label: "Sistema",
