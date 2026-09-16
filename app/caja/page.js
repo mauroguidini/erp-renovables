@@ -55,6 +55,8 @@ function Movimiento({ mov, url, obraNombre }) {
           <p className="mt-0.5 text-xs text-zinc-500">
             {fechaLegible(mov.fecha)}
             {obraNombre && ` · Obra: ${obraNombre}`}
+            {mov.proveedor && ` · Proveedor: ${mov.proveedor}`}
+            {mov.numero_factura && ` · Factura: ${mov.numero_factura}`}
           </p>
           {mov.ajusta_a && (
             <p className="mt-0.5 text-xs italic text-zinc-500">
@@ -134,6 +136,8 @@ export default function CajaEfectivo() {
   const [tipo, setTipo] = useState("entrada");
   const [monto, setMonto] = useState("");
   const [concepto, setConcepto] = useState("");
+  const [proveedor, setProveedor] = useState("");
+  const [numeroFactura, setNumeroFactura] = useState("");
   const [fecha, setFecha] = useState(hoyISO());
   const [obraId, setObraId] = useState("");
   const [comprobante, setComprobante] = useState(null);
@@ -276,6 +280,8 @@ export default function CajaEfectivo() {
       tipo,
       monto: montoNum,
       concepto: concepto.trim(),
+      proveedor: proveedor.trim() || null,
+      numero_factura: numeroFactura.trim() || null,
       obra_id: obraId || null,
       comprobante_ruta: comprobanteRuta,
       ajusta_a_id: esAjuste ? ajustaAId : null,
@@ -290,6 +296,8 @@ export default function CajaEfectivo() {
 
     setMonto("");
     setConcepto("");
+    setProveedor("");
+    setNumeroFactura("");
     setFecha(fechaMinima && fechaMinima > hoyISO() ? fechaMinima : hoyISO());
     setObraId("");
     setComprobante(null);
@@ -421,6 +429,30 @@ export default function CajaEfectivo() {
                 value={concepto}
                 onChange={(e) => setConcepto(e.target.value)}
                 placeholder="Ej: Compra de combustible para la camioneta"
+                className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-zinc-700">
+                Proveedor (opcional)
+              </label>
+              <input
+                type="text"
+                value={proveedor}
+                onChange={(e) => setProveedor(e.target.value)}
+                placeholder="Nombre o número de proveedor"
+                className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-zinc-700">
+                N.º de factura (opcional)
+              </label>
+              <input
+                type="text"
+                value={numeroFactura}
+                onChange={(e) => setNumeroFactura(e.target.value)}
+                placeholder='Si no hay factura, poné "Sin aplicación"'
                 className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
               />
             </div>
