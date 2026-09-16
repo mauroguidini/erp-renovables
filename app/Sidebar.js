@@ -22,7 +22,11 @@ const GRUPOS = [
       { href: "/stock", label: "Stock", badge: "bajoMinimo" },
       { href: "/compras", label: "Compras" },
       { href: "/depositos", label: "Depósitos" },
-      { href: "/proveedores", label: "Proveedores" },
+      {
+        href: "/proveedores",
+        label: "Proveedores",
+        roles: ["administrador", "compras", "administracion"],
+      },
       { href: "/transferencias", label: "Transferencias" },
       { href: "/entregas", label: "Entregar a obra" },
     ],
@@ -81,8 +85,12 @@ const GRUPOS = [
 function gruposParaRol(role) {
   return GRUPOS.map((grupo) => ({
     ...grupo,
+    // Un link puede declarar roles que no están en la lista del grupo (por
+    // ejemplo, "Proveedores" suma administracion sin que el resto de
+    // Depósito/Stock se abra para ese rol) — por eso el grupo se muestra
+    // si QUEDÓ ALGÚN link visible, no si el grupo en sí "declara" el rol.
     links: grupo.links.filter((link) => (link.roles ?? grupo.roles).includes(role)),
-  })).filter((grupo) => grupo.roles.includes(role) && grupo.links.length > 0);
+  })).filter((grupo) => grupo.links.length > 0);
 }
 
 function NavContenido({ pathname, contadores, session, grupos, onNavegar, onLogout }) {
