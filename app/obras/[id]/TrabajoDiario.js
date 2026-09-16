@@ -23,6 +23,52 @@ function fechaLegible(iso) {
   });
 }
 
+function nombreArchivo(obraNombre, sufijo) {
+  // Simplifica el nombre de la obra a algo apto para nombre de archivo:
+  // saca tildes/ñ vía normalize + reemplaza cualquier otro caracter raro.
+  const base = (obraNombre ?? "obra")
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .replace(/[^a-zA-Z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .toLowerCase();
+  return `${sufijo}_${base}_${hoyISO()}.xlsx`;
+}
+
+// La pantalla pagina de a 20 para no traer de más en la vista normal — pero
+// el Excel tiene que llevar la bitácora completa, así que esto vuelve a
+// pedirle a la base TODAS las entradas de la obra en el momento de
+// descargar, sin el límite de la pantalla.
+async function descargarExcel({ obraId, obraNombre }) {
+  const { data, error } = await supabase
+    .from("trabajo_diario")
+    .select("*, trabajo_diario_fotos(id)")
+    .eq("obra_id", obraId)
+    .order("fecha", { ascending: true })
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    window.alert(`No se pudo generar el Excel: ${error.message}`);
+    return;
+  }
+
+  const XLSX = await import("xlsx");
+
+  const filas = (data ?? []).map((e) => ({
+    Fecha: new Date(`${e.fecha}T00:00:00`),
+    Descripción: e.descripcion,
+    Fotos: (e.trabajo_diario_fotos ?? []).length,
+    "Cargado por": e.creado_por_email ?? "",
+    "Cargado el": new Date(e.created_at),
+  }));
+
+  const hoja = XLSX.utils.json_to_sheet(filas, { cellDates: true });
+  const libro = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(libro, hoja, "Trabajo diario");
+
+  XLSX.writeFile(libro, nombreArchivo(obraNombre, "trabajo_diario"));
+}
+
 function Fotos({ fotos, urls }) {
   if (!fotos || fotos.length === 0) return null;
 
@@ -198,7 +244,7 @@ function Entrada({ entrada, urls, puedeEditar, onCambio }) {
   );
 }
 
-export default function TrabajoDiario({ obraId }) {
+export default function TrabajoDiario({ obraId, obraNombre }) {
   const role = useRole();
   const esAdmin = role === "administrador";
   const puedeRegistrar =
@@ -339,7 +385,17 @@ export default function TrabajoDiario({ obraId }) {
 
   return (
     <div className="mt-6 rounded-lg border border-zinc-200 bg-white p-5">
-      <h2 className="text-lg font-semibold text-primary">Trabajo diario</h2>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-lg font-semibold text-primary">Trabajo diario</h2>
+        {!cargando && !error && entradas.length > 0 && (
+          <button
+            onClick={() => descargarExcel({ obraId, obraNombre })}
+            className="text-sm font-medium text-primary hover:underline"
+          >
+            Descargar Excel
+          </button>
+        )}
+      </div>
       <p className="mt-1 text-sm text-zinc-500">
         Bitácora de lo que se hizo en la obra, día por día.
       </p>
