@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Menu, X, Package, Handshake, HardHat, LogOut, Home, Users } from "lucide-react";
+import { Menu, X, Package, Handshake, HardHat, LogOut, Home, Users, Wallet } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 
 const INICIO = { href: "/", label: "Inicio", Icon: Home };
@@ -60,6 +60,12 @@ const GRUPOS = [
         roles: ["administrador", "jefe_obra"],
       },
     ],
+  },
+  {
+    label: "Caja",
+    Icon: Wallet,
+    roles: ["administrador", "administracion"],
+    links: [{ href: "/caja", label: "Caja de efectivo" }],
   },
   {
     label: "Sistema",
