@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import NuevoProveedorForm from "./NuevoProveedorForm";
+import ImportarProveedores from "./ImportarProveedores";
 
 export default function Proveedores() {
   const [proveedores, setProveedores] = useState([]);
@@ -63,6 +64,8 @@ export default function Proveedores() {
         )}
 
         <NuevoProveedorForm onProveedorCreado={cargarProveedores} />
+
+        <ImportarProveedores onProveedoresImportados={cargarProveedores} />
       </div>
     </div>
   );
