@@ -717,6 +717,22 @@ export default function FacturasCompra() {
     setTotalPendiente(sumaFirmada((data ?? []).filter((f) => f.estado_pago === "pendiente")));
   }, [filtroProveedor, filtroCentro, filtroDesde, filtroHasta]);
 
+  // Qué facturas están pagadas por una Orden de pago CONFIRMADA (factura_id
+  // -> número de OP) — mientras estén ahí, el toggle manual queda
+  // bloqueado (ver el trigger validar_estado_pago_bajo_op en 054).
+  const cargarOpPorFactura = useCallback(async () => {
+    const { data } = await supabase
+      .from("ordenes_pago_facturas")
+      .select("factura_id, ordenes_pago!inner(numero, estado)")
+      .eq("ordenes_pago.estado", "confirmada");
+
+    const mapa = {};
+    for (const fila of data ?? []) {
+      mapa[fila.factura_id] = fila.ordenes_pago.numero;
+    }
+    setOpPorFactura(mapa);
+  }, []);
+
   useEffect(() => {
     setLimite(PAGINA);
   }, [filtroProveedor, filtroEstado, filtroCentro, filtroTipoDocumento, filtroDesde, filtroHasta]);
@@ -802,19 +818,6 @@ export default function FacturasCompra() {
     setGuardando(false);
     await Promise.all([cargarFacturas(), cargarTotales(), cargarOpPorFactura()]);
   }
-
-  const cargarOpPorFactura = useCallback(async () => {
-    const { data } = await supabase
-      .from("ordenes_pago_facturas")
-      .select("factura_id, ordenes_pago!inner(numero, estado)")
-      .eq("ordenes_pago.estado", "confirmada");
-
-    const mapa = {};
-    for (const fila of data ?? []) {
-      mapa[fila.factura_id] = fila.ordenes_pago.numero;
-    }
-    setOpPorFactura(mapa);
-  }, []);
 
   async function recargarTodo() {
     await Promise.all([cargarFacturas(), cargarTotales(), cargarOpPorFactura()]);
