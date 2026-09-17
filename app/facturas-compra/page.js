@@ -617,6 +617,7 @@ export default function FacturasCompra() {
 
   const [totalRegistrado, setTotalRegistrado] = useState(0);
   const [totalPendiente, setTotalPendiente] = useState(0);
+  const [totalPagado, setTotalPagado] = useState(0);
 
   const [nuevo, setNuevo] = useState(FORM_INICIAL);
   const [comprobante, setComprobante] = useState(null);
@@ -715,6 +716,7 @@ export default function FacturasCompra() {
     const { data } = await query;
     setTotalRegistrado(sumaFirmada(data ?? []));
     setTotalPendiente(sumaFirmada((data ?? []).filter((f) => f.estado_pago === "pendiente")));
+    setTotalPagado(sumaFirmada((data ?? []).filter((f) => f.estado_pago === "pagada")));
   }, [filtroProveedor, filtroCentro, filtroDesde, filtroHasta]);
 
   // Qué facturas están pagadas por una Orden de pago CONFIRMADA (factura_id
@@ -848,14 +850,30 @@ export default function FacturasCompra() {
           ni contables.
         </p>
 
-        <div className="mt-4 flex flex-wrap gap-3">
-          <span className="rounded-full bg-zinc-100 px-3 py-1 text-sm font-medium text-zinc-700">
-            Total registrado: {formatearMonto(totalRegistrado)}
-          </span>
-          <span className="rounded-full bg-yellow-100 px-3 py-1 text-sm font-medium text-yellow-800">
-            Pendiente de pago: {formatearMonto(totalPendiente)}
-          </span>
+        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className="rounded-lg border border-zinc-200 bg-white p-3">
+            <p className="text-xs font-medium text-zinc-500">Saldo (registrado)</p>
+            <p className="mt-1 text-2xl font-semibold text-primary">
+              {formatearMonto(totalRegistrado)}
+            </p>
+          </div>
+          <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-3">
+            <p className="text-xs font-medium text-yellow-700">Pendiente de pago</p>
+            <p className="mt-1 text-2xl font-semibold text-yellow-800">
+              {formatearMonto(totalPendiente)}
+            </p>
+          </div>
+          <div className="rounded-lg border border-green-200 bg-green-50 p-3">
+            <p className="text-xs font-medium text-green-700">Pagado</p>
+            <p className="mt-1 text-2xl font-semibold text-green-800">
+              {formatearMonto(totalPagado)}
+            </p>
+          </div>
         </div>
+        <p className="mt-2 text-xs text-zinc-400">
+          Estos tres valores se ajustan solos con los filtros de abajo (proveedor, centro de
+          costos y fechas).
+        </p>
 
         {/* Carga de factura */}
         <form
