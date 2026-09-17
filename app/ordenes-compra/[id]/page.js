@@ -5,12 +5,10 @@ import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { useRole } from "../../RoleContext";
 
-// TODO: reemplazar por los datos reales de la empresa (razón social, CUIT,
-// domicilio, contacto) apenas Mauro los confirme — ver memoria de sesión.
 const DATOS_EMPRESA = {
-  nombre: "BSI Renovables",
-  cuit: "",
-  domicilio: "",
+  nombre: "Baluti Servicios Integrales SRL",
+  cuit: "30-71829950-7",
+  domicilio: "Av. 9 de Julio 950, Resistencia, Chaco (CP 3500)",
   contacto: "",
 };
 

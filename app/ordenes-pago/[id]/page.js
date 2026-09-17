@@ -5,12 +5,10 @@ import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { useRole } from "../../RoleContext";
 
-// TODO: mismos datos de la empresa que en Órdenes de compra — reemplazar
-// apenas Mauro los confirme.
 const DATOS_EMPRESA = {
-  nombre: "BSI Renovables",
-  cuit: "",
-  domicilio: "",
+  nombre: "Baluti Servicios Integrales SRL",
+  cuit: "30-71829950-7",
+  domicilio: "Av. 9 de Julio 950, Resistencia, Chaco (CP 3500)",
   contacto: "",
 };
 
