@@ -39,6 +39,7 @@ function sumaFirmada(filas) {
 function CamposFactura({ form, setForm, proveedores, categorias, centros }) {
   const [totalTocado, setTotalTocado] = useState(false);
   const [facturasDelProveedor, setFacturasDelProveedor] = useState([]);
+  const [ordenesCompraDelProveedor, setOrdenesCompraDelProveedor] = useState([]);
 
   // Solo tiene sentido elegir "a qué factura corrige" una vez que se sabe
   // el proveedor — y solo se muestran facturas de ESE proveedor (nunca
@@ -63,11 +64,36 @@ function CamposFactura({ form, setForm, proveedores, categorias, centros }) {
     };
   }, [form.tipo_documento, form.proveedor_id]);
 
+  // Igual criterio para elegir la orden de compra que originó la factura:
+  // solo de ese mismo proveedor.
+  useEffect(() => {
+    if (form.tipo_documento !== "factura" || !form.proveedor_id) {
+      setOrdenesCompraDelProveedor([]);
+      return;
+    }
+    let cancelado = false;
+    supabase
+      .from("ordenes_compra")
+      .select("id, numero, fecha")
+      .eq("proveedor_id", form.proveedor_id)
+      .order("numero", { ascending: false })
+      .then(({ data }) => {
+        if (!cancelado) setOrdenesCompraDelProveedor(data ?? []);
+      });
+    return () => {
+      cancelado = true;
+    };
+  }, [form.tipo_documento, form.proveedor_id]);
+
   function actualizar(campo, valor) {
     setForm((f) => {
       const siguiente = { ...f, [campo]: valor };
       if (campo === "tipo_documento" && valor === "factura") siguiente.factura_id = "";
-      if (campo === "proveedor_id") siguiente.factura_id = "";
+      if (campo === "tipo_documento" && valor === "nota_credito") siguiente.orden_compra_id = "";
+      if (campo === "proveedor_id") {
+        siguiente.factura_id = "";
+        siguiente.orden_compra_id = "";
+      }
       if (
         (campo === "importe_neto" || campo === "iva" || campo === "otros_impuestos") &&
         !totalTocado
@@ -246,6 +272,31 @@ function CamposFactura({ form, setForm, proveedores, categorias, centros }) {
           ))}
         </select>
       </div>
+      {form.tipo_documento === "factura" && (
+        <div className="sm:col-span-2">
+          <label className="block text-xs font-medium text-zinc-700">
+            Orden de compra que la originó (opcional)
+          </label>
+          <select
+            value={form.orden_compra_id}
+            onChange={(e) => actualizar("orden_compra_id", e.target.value)}
+            disabled={!form.proveedor_id}
+            className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900 disabled:bg-zinc-100"
+          >
+            <option value="">Sin vincular</option>
+            {ordenesCompraDelProveedor.map((oc) => (
+              <option key={oc.id} value={oc.id}>
+                OC #{oc.numero} — {fechaLegible(oc.fecha)}
+              </option>
+            ))}
+          </select>
+          {!form.proveedor_id && (
+            <p className="mt-1 text-xs text-zinc-400">
+              Elegí un proveedor para ver sus órdenes de compra.
+            </p>
+          )}
+        </div>
+      )}
       {form.tipo_documento === "nota_credito" && (
         <div className="sm:col-span-2">
           <label className="block text-xs font-medium text-zinc-700">
@@ -274,7 +325,7 @@ function CamposFactura({ form, setForm, proveedores, categorias, centros }) {
   );
 }
 
-function Factura({ factura, proveedores, categorias, centros, url, onCambio }) {
+function Factura({ factura, proveedores, categorias, centros, url, opNumero, onCambio }) {
   const [editando, setEditando] = useState(false);
   const [form, setForm] = useState(null);
   const [guardando, setGuardando] = useState(false);
@@ -295,6 +346,7 @@ function Factura({ factura, proveedores, categorias, centros, url, onCambio }) {
       estado_pago: factura.estado_pago,
       centro_costo_id: factura.centro_costo_id ?? "",
       factura_id: factura.factura_id ?? "",
+      orden_compra_id: factura.orden_compra_id ?? "",
     });
     setError(null);
     setEditando(true);
@@ -321,6 +373,7 @@ function Factura({ factura, proveedores, categorias, centros, url, onCambio }) {
         estado_pago: form.estado_pago,
         centro_costo_id: form.centro_costo_id || null,
         factura_id: form.tipo_documento === "nota_credito" ? form.factura_id || null : null,
+        orden_compra_id: form.tipo_documento === "factura" ? form.orden_compra_id || null : null,
       })
       .eq("id", factura.id);
 
@@ -451,6 +504,11 @@ function Factura({ factura, proveedores, categorias, centros, url, onCambio }) {
           <p className="mt-0.5 text-xs text-zinc-500">
             Centro de costos: {nombreCentro ?? "Sin imputar"}
           </p>
+          {!esNota && factura.orden_compra && (
+            <p className="mt-0.5 text-xs text-zinc-500">
+              Originada en: OC #{factura.orden_compra.numero}
+            </p>
+          )}
           <p className="mt-0.5 text-xs text-zinc-400">
             Neto: {formatearMonto(factura.importe_neto)} · IVA: {formatearMonto(factura.iva)} ·
             Otros impuestos: {formatearMonto(factura.otros_impuestos)}
@@ -472,14 +530,21 @@ function Factura({ factura, proveedores, categorias, centros, url, onCambio }) {
         >
           {factura.estado_pago === "pagada" ? "Pagada" : "Pendiente"}
         </span>
+        {opNumero && (
+          <p className="text-xs text-zinc-400">
+            Pagada por OP #{opNumero} — anulá la OP para revertirlo
+          </p>
+        )}
         <div className="flex gap-3">
-          <button
-            onClick={handleToggleEstado}
-            disabled={guardando}
-            className="text-xs font-medium text-zinc-500 hover:text-primary hover:underline disabled:opacity-50"
-          >
-            Marcar {factura.estado_pago === "pendiente" ? "pagada" : "pendiente"}
-          </button>
+          {!opNumero && (
+            <button
+              onClick={handleToggleEstado}
+              disabled={guardando}
+              className="text-xs font-medium text-zinc-500 hover:text-primary hover:underline disabled:opacity-50"
+            >
+              Marcar {factura.estado_pago === "pendiente" ? "pagada" : "pendiente"}
+            </button>
+          )}
           <button
             onClick={iniciarEdicion}
             className="text-xs font-medium text-zinc-500 hover:text-primary hover:underline"
@@ -517,6 +582,7 @@ const FORM_INICIAL = {
   estado_pago: "pendiente",
   centro_costo_id: "",
   factura_id: "",
+  orden_compra_id: "",
 };
 
 export default function FacturasCompra() {
@@ -528,6 +594,10 @@ export default function FacturasCompra() {
   const [proveedores, setProveedores] = useState([]);
   const [categorias, setCategorias] = useState([]);
   const [centros, setCentros] = useState([]);
+  // Qué facturas están pagadas por una Orden de pago CONFIRMADA (factura_id
+  // -> número de OP) — mientras estén ahí, el toggle manual queda
+  // bloqueado (ver el trigger validar_estado_pago_bajo_op en 054).
+  const [opPorFactura, setOpPorFactura] = useState({});
 
   // --- Filtros ---
   const [filtroProveedor, setFiltroProveedor] = useState("");
@@ -580,7 +650,9 @@ export default function FacturasCompra() {
 
     let query = supabase
       .from("facturas_compra")
-      .select("*, factura_relacionada:factura_id(tipo_factura, numero_factura, fecha)")
+      .select(
+        "*, factura_relacionada:factura_id(tipo_factura, numero_factura, fecha), orden_compra:orden_compra_id(numero)"
+      )
       .order("fecha", { ascending: false })
       .order("created_at", { ascending: false })
       .limit(limite + 1);
@@ -652,6 +724,10 @@ export default function FacturasCompra() {
     cargarTotales();
   }, [cargarTotales]);
 
+  useEffect(() => {
+    cargarOpPorFactura();
+  }, [cargarOpPorFactura]);
+
   async function handleAgregar(e) {
     e.preventDefault();
     if (
@@ -700,6 +776,7 @@ export default function FacturasCompra() {
       estado_pago: nuevo.estado_pago,
       centro_costo_id: nuevo.centro_costo_id || null,
       factura_id: nuevo.tipo_documento === "nota_credito" ? nuevo.factura_id || null : null,
+      orden_compra_id: nuevo.tipo_documento === "factura" ? nuevo.orden_compra_id || null : null,
       comprobante_ruta: comprobanteRuta,
     });
 
@@ -718,11 +795,24 @@ export default function FacturasCompra() {
     setComprobante(null);
     if (inputComprobanteRef.current) inputComprobanteRef.current.value = "";
     setGuardando(false);
-    await Promise.all([cargarFacturas(), cargarTotales()]);
+    await Promise.all([cargarFacturas(), cargarTotales(), cargarOpPorFactura()]);
   }
 
+  const cargarOpPorFactura = useCallback(async () => {
+    const { data } = await supabase
+      .from("ordenes_pago_facturas")
+      .select("factura_id, ordenes_pago!inner(numero, estado)")
+      .eq("ordenes_pago.estado", "confirmada");
+
+    const mapa = {};
+    for (const fila of data ?? []) {
+      mapa[fila.factura_id] = fila.ordenes_pago.numero;
+    }
+    setOpPorFactura(mapa);
+  }, []);
+
   async function recargarTodo() {
-    await Promise.all([cargarFacturas(), cargarTotales()]);
+    await Promise.all([cargarFacturas(), cargarTotales(), cargarOpPorFactura()]);
   }
 
   if (!puedeGestionar) {
@@ -881,6 +971,7 @@ export default function FacturasCompra() {
                   categorias={categorias}
                   centros={centros}
                   url={factura.comprobante_ruta ? urls[factura.comprobante_ruta] : null}
+                  opNumero={opPorFactura[factura.id]}
                   onCambio={recargarTodo}
                 />
               ))}

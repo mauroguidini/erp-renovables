@@ -73,6 +73,8 @@ const GRUPOS = [
       { href: "/caja", label: "Caja de efectivo" },
       { href: "/facturas-compra", label: "Facturas de compra" },
       { href: "/centros-costo", label: "Centros de costos" },
+      { href: "/ordenes-compra", label: "Órdenes de compra" },
+      { href: "/ordenes-pago", label: "Órdenes de pago" },
     ],
   },
   {
