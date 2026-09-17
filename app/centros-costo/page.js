@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useRole } from "../RoleContext";
+import ImportarCentrosCosto from "./ImportarCentrosCosto";
 
 const MESES = [
   "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
@@ -41,6 +42,18 @@ function rangoFechas(anio, mes) {
 function FormularioCentro({ form, setForm, obras }) {
   return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <div>
+        <label className="block text-xs font-medium text-zinc-700">Número *</label>
+        <input
+          required
+          type="number"
+          step="1"
+          value={form.numero}
+          onChange={(e) => setForm((f) => ({ ...f, numero: e.target.value }))}
+          placeholder="Ej: 100"
+          className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900"
+        />
+      </div>
       <div>
         <label className="block text-xs font-medium text-zinc-700">Nombre *</label>
         <input
@@ -103,14 +116,19 @@ function Centro({ centro, obras, onCambio }) {
   const [error, setError] = useState(null);
 
   function iniciarEdicion() {
-    setForm({ nombre: centro.nombre, tipo: centro.tipo, obra_id: centro.obra_id ?? "" });
+    setForm({
+      numero: String(centro.numero),
+      nombre: centro.nombre,
+      tipo: centro.tipo,
+      obra_id: centro.obra_id ?? "",
+    });
     setError(null);
     setEditando(true);
   }
 
   async function handleGuardar(e) {
     e.preventDefault();
-    if (!form.nombre.trim()) return;
+    if (!form.nombre.trim() || form.numero === "") return;
 
     setGuardando(true);
     setError(null);
@@ -118,6 +136,7 @@ function Centro({ centro, obras, onCambio }) {
     const { error } = await supabase
       .from("centros_costo")
       .update({
+        numero: Number(form.numero),
         nombre: form.nombre.trim(),
         tipo: form.tipo,
         obra_id: form.tipo === "obra" ? form.obra_id || null : null,
@@ -182,7 +201,7 @@ function Centro({ centro, obras, onCambio }) {
     <div className="flex flex-wrap items-center justify-between gap-2 py-3">
       <div>
         <p className={`text-sm font-medium ${centro.activo ? "text-zinc-900" : "text-zinc-400 line-through"}`}>
-          {centro.nombre}
+          {centro.numero} — {centro.nombre}
         </p>
         <p className="mt-0.5 text-xs text-zinc-500">
           {centro.tipo === "obra" ? `Obra${nombreObra ? `: ${nombreObra}` : " (sin vincular)"}` : "General"}
@@ -278,7 +297,7 @@ export default function CentrosCosto() {
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(null);
 
-  const [nuevo, setNuevo] = useState({ nombre: "", tipo: "obra", obra_id: "" });
+  const [nuevo, setNuevo] = useState({ numero: "", nombre: "", tipo: "obra", obra_id: "" });
   const [guardando, setGuardando] = useState(false);
   const [errorGuardado, setErrorGuardado] = useState(null);
 
@@ -292,7 +311,7 @@ export default function CentrosCosto() {
     const { data, error } = await supabase
       .from("centros_costo")
       .select("*")
-      .order("nombre");
+      .order("numero");
     if (error) setError(error.message);
     else setError(null);
     setCentros(data ?? []);
@@ -338,12 +357,13 @@ export default function CentrosCosto() {
 
   async function handleAgregar(e) {
     e.preventDefault();
-    if (!nuevo.nombre.trim()) return;
+    if (!nuevo.nombre.trim() || nuevo.numero === "") return;
 
     setGuardando(true);
     setErrorGuardado(null);
 
     const { error } = await supabase.from("centros_costo").insert({
+      numero: Number(nuevo.numero),
       nombre: nuevo.nombre.trim(),
       tipo: nuevo.tipo,
       obra_id: nuevo.tipo === "obra" ? nuevo.obra_id || null : null,
@@ -351,13 +371,15 @@ export default function CentrosCosto() {
 
     if (error) {
       setErrorGuardado(
-        error.code === "23505" ? "Ya existe un centro con ese nombre (u otro ya vinculado a esa obra)." : error.message
+        error.code === "23505"
+          ? "Ya existe un centro con ese número o ese nombre (u otro ya vinculado a esa obra)."
+          : error.message
       );
       setGuardando(false);
       return;
     }
 
-    setNuevo({ nombre: "", tipo: "obra", obra_id: "" });
+    setNuevo({ numero: "", nombre: "", tipo: "obra", obra_id: "" });
     setGuardando(false);
     await Promise.all([cargarCentros(), cargarTotales()]);
   }
@@ -409,6 +431,8 @@ export default function CentrosCosto() {
             {guardando ? "Guardando..." : "Agregar centro"}
           </button>
         </form>
+
+        <ImportarCentrosCosto obras={obras} onCentrosImportados={cargarCentros} />
 
         {/* Lista de centros */}
         <div className="mt-6 rounded-lg border border-zinc-200 bg-white p-5">
@@ -472,7 +496,7 @@ export default function CentrosCosto() {
                 {centrosActivos.map((c) => (
                   <FilaTotal
                     key={c.id}
-                    nombre={c.nombre}
+                    nombre={`${c.numero} — ${c.nombre}`}
                     total={totales.porCentro[c.id] ?? 0}
                     centroId={c.id}
                     desde={desde}
