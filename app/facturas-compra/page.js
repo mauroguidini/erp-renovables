@@ -619,6 +619,7 @@ export default function FacturasCompra() {
   const [totalPendiente, setTotalPendiente] = useState(0);
   const [totalPagado, setTotalPagado] = useState(0);
 
+  const [mostrarNuevo, setMostrarNuevo] = useState(false);
   const [nuevo, setNuevo] = useState(FORM_INICIAL);
   const [comprobante, setComprobante] = useState(null);
   const [guardando, setGuardando] = useState(false);
@@ -818,6 +819,7 @@ export default function FacturasCompra() {
     setComprobante(null);
     if (inputComprobanteRef.current) inputComprobanteRef.current.value = "";
     setGuardando(false);
+    setMostrarNuevo(false);
     await Promise.all([cargarFacturas(), cargarTotales(), cargarOpPorFactura()]);
   }
 
@@ -876,11 +878,33 @@ export default function FacturasCompra() {
         </p>
 
         {/* Carga de factura */}
+        {!mostrarNuevo && (
+          <div className="mt-6 flex justify-end">
+            <button
+              type="button"
+              onClick={() => setMostrarNuevo(true)}
+              className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90"
+            >
+              + Cargar factura o nota de crédito
+            </button>
+          </div>
+        )}
+
+        {mostrarNuevo && (
         <form
           onSubmit={handleAgregar}
           className="mt-6 rounded-lg border border-zinc-200 bg-white p-5"
         >
-          <h2 className="text-lg font-semibold text-primary">Nuevo documento</h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-primary">Nuevo documento</h2>
+            <button
+              type="button"
+              onClick={() => setMostrarNuevo(false)}
+              className="text-sm text-zinc-500 hover:text-zinc-800"
+            >
+              Cancelar
+            </button>
+          </div>
 
           <div className="mt-4">
             <CamposFactura
@@ -919,6 +943,7 @@ export default function FacturasCompra() {
             {guardando ? "Guardando..." : "Agregar documento"}
           </button>
         </form>
+        )}
 
         <ImportarComprobantesArca onImportado={handleImportado} />
 
