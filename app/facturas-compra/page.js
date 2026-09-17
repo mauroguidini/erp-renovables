@@ -8,6 +8,14 @@ import ImportarComprobantesArca from "./ImportarComprobantesArca";
 const BUCKET = "facturas-compra";
 const PAGINA = 20;
 const TIPOS_FACTURA = ["A", "B", "C", "otro"];
+const MESES = [
+  "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+  "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
+];
+
+function anioActual() {
+  return new Date().getFullYear();
+}
 
 function hoyISO() {
   return new Date().toISOString().slice(0, 10);
@@ -586,6 +594,113 @@ const FORM_INICIAL = {
   orden_compra_id: "",
 };
 
+// Facturación de un año: por mes y por proveedor. Se recalcula al vuelo
+// con una consulta liviana (solo las columnas que hacen falta) cada vez
+// que cambia el año elegido — no se guarda nada de esto en la base, mismo
+// criterio que "Costos por período" en Centros de costos.
+function ResumenFacturacion({ proveedores }) {
+  const [anio, setAnio] = useState(anioActual());
+  const [cargando, setCargando] = useState(true);
+  const [porMes, setPorMes] = useState(Array(12).fill(0));
+  const [porProveedor, setPorProveedor] = useState([]);
+
+  useEffect(() => {
+    let cancelado = false;
+    setCargando(true);
+
+    supabase
+      .from("facturas_compra")
+      .select("fecha, proveedor_id, importe_total, tipo_documento")
+      .gte("fecha", `${anio}-01-01`)
+      .lte("fecha", `${anio}-12-31`)
+      .then(({ data }) => {
+        if (cancelado) return;
+
+        const mensual = Array(12).fill(0);
+        const porProveedorMapa = {};
+
+        for (const f of data ?? []) {
+          const monto = montoFirmado(f);
+          const mesIndex = Number(f.fecha.slice(5, 7)) - 1;
+          mensual[mesIndex] += monto;
+          porProveedorMapa[f.proveedor_id] = (porProveedorMapa[f.proveedor_id] ?? 0) + monto;
+        }
+
+        const listaProveedores = Object.entries(porProveedorMapa)
+          .map(([proveedorId, total]) => ({
+            proveedorId,
+            nombre:
+              proveedores.find((p) => p.id === proveedorId)?.nombre ?? "(proveedor eliminado)",
+            total,
+          }))
+          .sort((a, b) => b.total - a.total);
+
+        setPorMes(mensual);
+        setPorProveedor(listaProveedores);
+        setCargando(false);
+      });
+
+    return () => {
+      cancelado = true;
+    };
+  }, [anio, proveedores]);
+
+  const totalAnio = porMes.reduce((a, b) => a + b, 0);
+
+  return (
+    <div className="mt-6 rounded-lg border border-zinc-200 bg-white p-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-lg font-semibold text-primary">Facturación por mes y por proveedor</h2>
+        <input
+          type="number"
+          value={anio}
+          onChange={(e) => setAnio(Number(e.target.value))}
+          className="w-24 rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900"
+        />
+      </div>
+
+      {cargando && <p className="mt-4 text-sm text-zinc-600">Cargando...</p>}
+
+      {!cargando && (
+        <>
+          <p className="mt-3 text-sm text-zinc-600">
+            Total del año: <span className="font-semibold text-zinc-900">{formatearMonto(totalAnio)}</span>
+          </p>
+
+          <div className="mt-4 grid grid-cols-1 gap-6 sm:grid-cols-2">
+            <div>
+              <h3 className="text-sm font-medium text-zinc-700">Por mes</h3>
+              <div className="mt-2 divide-y divide-zinc-100">
+                {MESES.map((nombreMes, i) => (
+                  <div key={nombreMes} className="flex items-center justify-between py-1.5 text-sm">
+                    <span className="text-zinc-600">{nombreMes}</span>
+                    <span className="font-medium text-zinc-900">{formatearMonto(porMes[i])}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <h3 className="text-sm font-medium text-zinc-700">Por proveedor</h3>
+              {porProveedor.length === 0 && (
+                <p className="mt-2 text-sm text-zinc-500">Sin facturas en este año.</p>
+              )}
+              <div className="mt-2 max-h-80 divide-y divide-zinc-100 overflow-y-auto">
+                {porProveedor.map((p) => (
+                  <div key={p.proveedorId} className="flex items-center justify-between py-1.5 text-sm">
+                    <span className="text-zinc-600">{p.nombre}</span>
+                    <span className="font-medium text-zinc-900">{formatearMonto(p.total)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function FacturasCompra() {
   const role = useRole();
   const puedeGestionar = role === "administrador" || role === "administracion";
@@ -1046,6 +1161,8 @@ export default function FacturasCompra() {
             </button>
           )}
         </div>
+
+        <ResumenFacturacion proveedores={proveedores} />
       </div>
     </div>
   );
