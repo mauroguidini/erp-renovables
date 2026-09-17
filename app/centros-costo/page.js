@@ -27,6 +27,13 @@ function formatearMonto(monto) {
   });
 }
 
+// Una nota de crédito resta en vez de sumar (ver 052) — mismo criterio que
+// en la pantalla de Facturas de compra.
+function montoFirmado(fila) {
+  const monto = Number(fila.importe_total);
+  return fila.tipo_documento === "nota_credito" ? -monto : monto;
+}
+
 // Del año y mes elegidos (mes "" = todo el año) arma el rango de fechas a
 // filtrar. Los totales y el detalle usan siempre este mismo rango.
 function rangoFechas(anio, mes) {
@@ -259,12 +266,19 @@ function DetalleCentro({ centroId, desde, hasta }) {
 
   return (
     <ul className="mt-2 space-y-1.5">
-      {facturas.map((f) => (
-        <li key={f.id} className="text-xs text-zinc-600">
-          {fechaLegible(f.fecha)} · {f.proveedores?.nombre ?? "—"} · Factura {f.tipo_factura} n.º{" "}
-          {f.numero_factura} · {formatearMonto(f.importe_total)}
-        </li>
-      ))}
+      {facturas.map((f) => {
+        const esNota = f.tipo_documento === "nota_credito";
+        return (
+          <li key={f.id} className="text-xs text-zinc-600">
+            {fechaLegible(f.fecha)} · {f.proveedores?.nombre ?? "—"} ·{" "}
+            {esNota ? "Nota de crédito" : "Factura"} {f.tipo_factura} n.º {f.numero_factura} ·{" "}
+            <span className={esNota ? "text-accent" : ""}>
+              {esNota ? "− " : ""}
+              {formatearMonto(f.importe_total)}
+            </span>
+          </li>
+        );
+      })}
     </ul>
   );
 }
@@ -333,7 +347,7 @@ export default function CentrosCosto() {
     setCargandoTotales(true);
     const { data } = await supabase
       .from("facturas_compra")
-      .select("centro_costo_id, importe_total")
+      .select("centro_costo_id, importe_total, tipo_documento")
       .gte("fecha", desde)
       .lte("fecha", hasta);
 
@@ -341,9 +355,9 @@ export default function CentrosCosto() {
     let sinCentro = 0;
     for (const f of data ?? []) {
       if (f.centro_costo_id) {
-        porCentro[f.centro_costo_id] = (porCentro[f.centro_costo_id] ?? 0) + Number(f.importe_total);
+        porCentro[f.centro_costo_id] = (porCentro[f.centro_costo_id] ?? 0) + montoFirmado(f);
       } else {
-        sinCentro += Number(f.importe_total);
+        sinCentro += montoFirmado(f);
       }
     }
     setTotales({ porCentro, sinCentro });
