@@ -29,7 +29,7 @@ function sumaImporte(filas) {
   return filas.reduce((acc, f) => acc + Number(f.importe_total), 0);
 }
 
-function CamposFactura({ form, setForm, proveedores, categorias }) {
+function CamposFactura({ form, setForm, proveedores, categorias, centros }) {
   const [totalTocado, setTotalTocado] = useState(false);
 
   function actualizar(campo, valor) {
@@ -165,11 +165,28 @@ function CamposFactura({ form, setForm, proveedores, categorias }) {
           <option value="pagada">Pagada</option>
         </select>
       </div>
+      <div className="sm:col-span-2">
+        <label className="block text-xs font-medium text-zinc-700">
+          Centro de costos (opcional)
+        </label>
+        <select
+          value={form.centro_costo_id}
+          onChange={(e) => actualizar("centro_costo_id", e.target.value)}
+          className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900"
+        >
+          <option value="">Sin imputar</option>
+          {centros.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.nombre}
+            </option>
+          ))}
+        </select>
+      </div>
     </div>
   );
 }
 
-function Factura({ factura, proveedores, categorias, url, onCambio }) {
+function Factura({ factura, proveedores, categorias, centros, url, onCambio }) {
   const [editando, setEditando] = useState(false);
   const [form, setForm] = useState(null);
   const [guardando, setGuardando] = useState(false);
@@ -186,6 +203,7 @@ function Factura({ factura, proveedores, categorias, url, onCambio }) {
       importe_total: String(factura.importe_total),
       categoria_id: factura.categoria_id,
       estado_pago: factura.estado_pago,
+      centro_costo_id: factura.centro_costo_id ?? "",
     });
     setError(null);
     setEditando(true);
@@ -208,6 +226,7 @@ function Factura({ factura, proveedores, categorias, url, onCambio }) {
         importe_total: Number(form.importe_total),
         categoria_id: form.categoria_id,
         estado_pago: form.estado_pago,
+        centro_costo_id: form.centro_costo_id || null,
       })
       .eq("id", factura.id);
 
@@ -266,6 +285,7 @@ function Factura({ factura, proveedores, categorias, url, onCambio }) {
 
   const nombreProveedor = proveedores.find((p) => p.id === factura.proveedor_id)?.nombre;
   const nombreCategoria = categorias.find((c) => c.id === factura.categoria_id)?.nombre;
+  const nombreCentro = centros.find((c) => c.id === factura.centro_costo_id)?.nombre;
 
   if (editando) {
     return (
@@ -275,6 +295,7 @@ function Factura({ factura, proveedores, categorias, url, onCambio }) {
           setForm={setForm}
           proveedores={proveedores}
           categorias={categorias}
+          centros={centros}
         />
 
         {error && (
@@ -320,6 +341,9 @@ function Factura({ factura, proveedores, categorias, url, onCambio }) {
           <p className="mt-0.5 text-xs text-zinc-500">
             {fechaLegible(factura.fecha)} · Factura {factura.tipo_factura} n.º{" "}
             {factura.numero_factura} · {nombreCategoria ?? "—"}
+          </p>
+          <p className="mt-0.5 text-xs text-zinc-500">
+            Centro de costos: {nombreCentro ?? "Sin imputar"}
           </p>
           <p className="mt-0.5 text-xs text-zinc-400">
             Neto: {formatearMonto(factura.importe_neto)} · IVA: {formatearMonto(factura.iva)}
@@ -382,6 +406,7 @@ const FORM_INICIAL = {
   importe_total: "",
   categoria_id: "",
   estado_pago: "pendiente",
+  centro_costo_id: "",
 };
 
 export default function FacturasCompra() {
@@ -392,10 +417,12 @@ export default function FacturasCompra() {
 
   const [proveedores, setProveedores] = useState([]);
   const [categorias, setCategorias] = useState([]);
+  const [centros, setCentros] = useState([]);
 
   // --- Filtros ---
   const [filtroProveedor, setFiltroProveedor] = useState("");
   const [filtroEstado, setFiltroEstado] = useState("");
+  const [filtroCentro, setFiltroCentro] = useState("");
   const [filtroDesde, setFiltroDesde] = useState("");
   const [filtroHasta, setFiltroHasta] = useState("");
 
@@ -429,6 +456,12 @@ export default function FacturasCompra() {
         setCategorias(data ?? []);
         setNuevo((f) => ({ ...f, categoria_id: f.categoria_id || data?.[0]?.id || "" }));
       });
+    supabase
+      .from("centros_costo")
+      .select("id, nombre")
+      .eq("activo", true)
+      .order("nombre")
+      .then(({ data }) => setCentros(data ?? []));
   }, []);
 
   const cargarFacturas = useCallback(async () => {
@@ -443,6 +476,7 @@ export default function FacturasCompra() {
 
     if (filtroProveedor) query = query.eq("proveedor_id", filtroProveedor);
     if (filtroEstado) query = query.eq("estado_pago", filtroEstado);
+    if (filtroCentro) query = query.eq("centro_costo_id", filtroCentro);
     if (filtroDesde) query = query.gte("fecha", filtroDesde);
     if (filtroHasta) query = query.lte("fecha", filtroHasta);
 
@@ -474,7 +508,7 @@ export default function FacturasCompra() {
     }
 
     setCargando(false);
-  }, [limite, filtroProveedor, filtroEstado, filtroDesde, filtroHasta]);
+  }, [limite, filtroProveedor, filtroEstado, filtroCentro, filtroDesde, filtroHasta]);
 
   // Los totales reflejan proveedor y fecha (para que "pendiente" siga
   // teniendo sentido aunque se esté mirando solo "pagadas"), pidiendo solo
@@ -482,17 +516,18 @@ export default function FacturasCompra() {
   const cargarTotales = useCallback(async () => {
     let query = supabase.from("facturas_compra").select("importe_total, estado_pago");
     if (filtroProveedor) query = query.eq("proveedor_id", filtroProveedor);
+    if (filtroCentro) query = query.eq("centro_costo_id", filtroCentro);
     if (filtroDesde) query = query.gte("fecha", filtroDesde);
     if (filtroHasta) query = query.lte("fecha", filtroHasta);
 
     const { data } = await query;
     setTotalRegistrado(sumaImporte(data ?? []));
     setTotalPendiente(sumaImporte((data ?? []).filter((f) => f.estado_pago === "pendiente")));
-  }, [filtroProveedor, filtroDesde, filtroHasta]);
+  }, [filtroProveedor, filtroCentro, filtroDesde, filtroHasta]);
 
   useEffect(() => {
     setLimite(PAGINA);
-  }, [filtroProveedor, filtroEstado, filtroDesde, filtroHasta]);
+  }, [filtroProveedor, filtroEstado, filtroCentro, filtroDesde, filtroHasta]);
 
   useEffect(() => {
     cargarFacturas();
@@ -545,6 +580,7 @@ export default function FacturasCompra() {
       importe_total: Number(nuevo.importe_total),
       categoria_id: nuevo.categoria_id,
       estado_pago: nuevo.estado_pago,
+      centro_costo_id: nuevo.centro_costo_id || null,
       comprobante_ruta: comprobanteRuta,
     });
 
@@ -610,6 +646,7 @@ export default function FacturasCompra() {
               setForm={setNuevo}
               proveedores={proveedores}
               categorias={categorias}
+              centros={centros}
             />
 
             <div className="mt-3">
@@ -667,6 +704,18 @@ export default function FacturasCompra() {
               <option value="pendiente">Pendiente</option>
               <option value="pagada">Pagada</option>
             </select>
+            <select
+              value={filtroCentro}
+              onChange={(e) => setFiltroCentro(e.target.value)}
+              className="rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900"
+            >
+              <option value="">Todos los centros</option>
+              {centros.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.nombre}
+                </option>
+              ))}
+            </select>
             <input
               type="date"
               value={filtroDesde}
@@ -701,6 +750,7 @@ export default function FacturasCompra() {
                   factura={factura}
                   proveedores={proveedores}
                   categorias={categorias}
+                  centros={centros}
                   url={factura.comprobante_ruta ? urls[factura.comprobante_ruta] : null}
                   onCambio={recargarTodo}
                 />
