@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useRole } from "../RoleContext";
+import ImportarComprobantesArca from "./ImportarComprobantesArca";
 
 const BUCKET = "facturas-compra";
 const PAGINA = 20;
@@ -622,12 +623,16 @@ export default function FacturasCompra() {
   const [guardando, setGuardando] = useState(false);
   const [errorGuardado, setErrorGuardado] = useState(null);
 
-  useEffect(() => {
-    supabase
+  const cargarProveedores = useCallback(async () => {
+    const { data } = await supabase
       .from("proveedores_nombre")
       .select("id, nombre")
-      .order("nombre")
-      .then(({ data }) => setProveedores(data ?? []));
+      .order("nombre");
+    setProveedores(data ?? []);
+  }, []);
+
+  useEffect(() => {
+    cargarProveedores();
     supabase
       .from("categorias_factura")
       .select("id, nombre")
@@ -643,7 +648,7 @@ export default function FacturasCompra() {
       .eq("activo", true)
       .order("nombre")
       .then(({ data }) => setCentros(data ?? []));
-  }, []);
+  }, [cargarProveedores]);
 
   const cargarFacturas = useCallback(async () => {
     setCargando(true);
@@ -815,6 +820,12 @@ export default function FacturasCompra() {
     await Promise.all([cargarFacturas(), cargarTotales(), cargarOpPorFactura()]);
   }
 
+  async function handleImportado() {
+    // La importación puede haber creado proveedores nuevos — hay que
+    // refrescar ese catálogo además del resto.
+    await Promise.all([cargarProveedores(), recargarTodo()]);
+  }
+
   if (!puedeGestionar) {
     return (
       <div className="min-h-screen bg-zinc-50 p-8 font-sans">
@@ -887,6 +898,8 @@ export default function FacturasCompra() {
             {guardando ? "Guardando..." : "Agregar documento"}
           </button>
         </form>
+
+        <ImportarComprobantesArca onImportado={handleImportado} />
 
         {/* Filtros y listado */}
         <div className="mt-6 rounded-lg border border-zinc-200 bg-white p-5">
