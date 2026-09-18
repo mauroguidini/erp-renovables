@@ -6,14 +6,14 @@ import { supabase } from "@/lib/supabaseClient";
 function Tile({ label, valor, colorTexto, resaltado }) {
   return (
     <div
-      className={`rounded-lg border p-3 ${
+      className={`rounded-lg border p-2 sm:p-3 ${
         resaltado ? "border-accent bg-accent/5" : "border-zinc-200 bg-white"
       }`}
     >
       <p className={`text-xs font-medium ${resaltado ? "text-accent" : "text-zinc-500"}`}>
         {label}
       </p>
-      <p className={`mt-1 text-2xl font-semibold ${colorTexto}`}>{valor}</p>
+      <p className={`mt-1 text-xl font-semibold sm:text-2xl ${colorTexto}`}>{valor}</p>
     </div>
   );
 }
@@ -46,7 +46,7 @@ export default function ResumenOt({ obraId }) {
   );
 
   return (
-    <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-7">
+    <div className="mt-4 grid grid-cols-2 gap-2 sm:mt-6 sm:grid-cols-3 sm:gap-3 lg:grid-cols-7">
       <Tile label="Total OT" valor={total} colorTexto="text-primary" />
       <Tile label="Por iniciar" valor={porIniciar} colorTexto="text-zinc-600" />
       <Tile label="Iniciadas" valor={iniciadas} colorTexto="text-yellow-600" />

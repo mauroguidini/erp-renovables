@@ -384,9 +384,11 @@ export default function TrabajoDiario({ obraId, obraNombre }) {
   }
 
   return (
-    <div className="mt-6 rounded-lg border border-zinc-200 bg-white p-5">
+    <>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-lg font-semibold text-primary">Trabajo diario</h2>
+        <p className="text-sm text-zinc-500">
+          Bitácora de lo que se hizo en la obra, día por día.
+        </p>
         {!cargando && !error && entradas.length > 0 && (
           <button
             onClick={() => descargarExcel({ obraId, obraNombre })}
@@ -396,9 +398,6 @@ export default function TrabajoDiario({ obraId, obraNombre }) {
           </button>
         )}
       </div>
-      <p className="mt-1 text-sm text-zinc-500">
-        Bitácora de lo que se hizo en la obra, día por día.
-      </p>
 
       {puedeRegistrar && (
         <form
@@ -505,6 +504,6 @@ export default function TrabajoDiario({ obraId, obraNombre }) {
           Ver entradas más viejas
         </button>
       )}
-    </div>
+    </>
   );
 }

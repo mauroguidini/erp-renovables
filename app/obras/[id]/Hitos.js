@@ -84,18 +84,17 @@ export default function Hitos({ obraId, hitos, onCambio }) {
   }
 
   return (
-    <div className="mt-6 rounded-lg border border-zinc-200 bg-white p-5">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-primary">Hitos</h2>
-        {puedeGestionar && (
+    <>
+      {puedeGestionar && (
+        <div className="flex justify-end">
           <button
             onClick={() => setMostrarForm((v) => !v)}
             className="text-sm font-medium text-primary hover:underline"
           >
             {mostrarForm ? "Cancelar" : "+ Nuevo hito"}
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
       {mostrarForm && puedeGestionar && (
         <form
@@ -259,6 +258,6 @@ export default function Hitos({ obraId, hitos, onCambio }) {
           )}
         </ul>
       )}
-    </div>
+    </>
   );
 }

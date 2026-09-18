@@ -1,13 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import { useRole } from "../RoleContext";
+import Seccion from "../Seccion";
 import ImportarComprobantesArca from "./ImportarComprobantesArca";
+import CamposFactura, { fechaLegible, formatearMonto } from "./CamposFactura";
 
 const BUCKET = "facturas-compra";
 const PAGINA = 20;
-const TIPOS_FACTURA = ["A", "B", "C", "otro"];
 const MESES = [
   "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
   "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
@@ -15,23 +17,6 @@ const MESES = [
 
 function anioActual() {
   return new Date().getFullYear();
-}
-
-function hoyISO() {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function fechaLegible(iso) {
-  const [a, m, d] = iso.split("-").map(Number);
-  return new Date(a, m - 1, d).toLocaleDateString("es-AR");
-}
-
-function formatearMonto(monto) {
-  return Number(monto).toLocaleString("es-AR", {
-    style: "currency",
-    currency: "ARS",
-    minimumFractionDigits: 2,
-  });
 }
 
 // Una nota de crédito resta en vez de sumar — el signo se aplica acá, no
@@ -45,293 +30,22 @@ function sumaFirmada(filas) {
   return filas.reduce((acc, f) => acc + montoFirmado(f), 0);
 }
 
-function CamposFactura({ form, setForm, proveedores, categorias, centros }) {
-  const [totalTocado, setTotalTocado] = useState(false);
-  const [facturasDelProveedor, setFacturasDelProveedor] = useState([]);
-  const [ordenesCompraDelProveedor, setOrdenesCompraDelProveedor] = useState([]);
-
-  // Solo tiene sentido elegir "a qué factura corrige" una vez que se sabe
-  // el proveedor — y solo se muestran facturas de ESE proveedor (nunca
-  // otras notas de crédito, ver 052).
-  useEffect(() => {
-    if (form.tipo_documento !== "nota_credito" || !form.proveedor_id) {
-      setFacturasDelProveedor([]);
-      return;
-    }
-    let cancelado = false;
-    supabase
-      .from("facturas_compra")
-      .select("id, tipo_factura, numero_factura, fecha, importe_total")
-      .eq("proveedor_id", form.proveedor_id)
-      .eq("tipo_documento", "factura")
-      .order("fecha", { ascending: false })
-      .then(({ data }) => {
-        if (!cancelado) setFacturasDelProveedor(data ?? []);
-      });
-    return () => {
-      cancelado = true;
-    };
-  }, [form.tipo_documento, form.proveedor_id]);
-
-  // Igual criterio para elegir la orden de compra que originó la factura:
-  // solo de ese mismo proveedor.
-  useEffect(() => {
-    if (form.tipo_documento !== "factura" || !form.proveedor_id) {
-      setOrdenesCompraDelProveedor([]);
-      return;
-    }
-    let cancelado = false;
-    supabase
-      .from("ordenes_compra")
-      .select("id, numero, fecha")
-      .eq("proveedor_id", form.proveedor_id)
-      .order("numero", { ascending: false })
-      .then(({ data }) => {
-        if (!cancelado) setOrdenesCompraDelProveedor(data ?? []);
-      });
-    return () => {
-      cancelado = true;
-    };
-  }, [form.tipo_documento, form.proveedor_id]);
-
-  function actualizar(campo, valor) {
-    setForm((f) => {
-      const siguiente = { ...f, [campo]: valor };
-      if (campo === "tipo_documento" && valor === "factura") siguiente.factura_id = "";
-      if (campo === "tipo_documento" && valor === "nota_credito") siguiente.orden_compra_id = "";
-      if (campo === "proveedor_id") {
-        siguiente.factura_id = "";
-        siguiente.orden_compra_id = "";
-      }
-      if (
-        (campo === "importe_neto" || campo === "iva" || campo === "otros_impuestos") &&
-        !totalTocado
-      ) {
-        const neto = Number(campo === "importe_neto" ? valor : siguiente.importe_neto) || 0;
-        const iva = Number(campo === "iva" ? valor : siguiente.iva) || 0;
-        const otros =
-          Number(campo === "otros_impuestos" ? valor : siguiente.otros_impuestos) || 0;
-        siguiente.importe_total = String((neto + iva + otros).toFixed(2));
-      }
-      return siguiente;
-    });
-  }
-
-  return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-      <div className="sm:col-span-2">
-        <label className="block text-xs font-medium text-zinc-700">Tipo de documento *</label>
-        <select
-          required
-          value={form.tipo_documento}
-          onChange={(e) => actualizar("tipo_documento", e.target.value)}
-          className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900"
-        >
-          <option value="factura">Factura</option>
-          <option value="nota_credito">Nota de crédito</option>
-        </select>
-      </div>
-      <div>
-        <label className="block text-xs font-medium text-zinc-700">Proveedor *</label>
-        <select
-          required
-          value={form.proveedor_id}
-          onChange={(e) => actualizar("proveedor_id", e.target.value)}
-          className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900"
-        >
-          <option value="">Elegí un proveedor...</option>
-          {proveedores.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.nombre}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div>
-        <label className="block text-xs font-medium text-zinc-700">Fecha *</label>
-        <input
-          required
-          type="date"
-          value={form.fecha}
-          onChange={(e) => actualizar("fecha", e.target.value)}
-          className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900"
-        />
-      </div>
-      <div>
-        <label className="block text-xs font-medium text-zinc-700">Tipo de factura *</label>
-        <select
-          required
-          value={form.tipo_factura}
-          onChange={(e) => actualizar("tipo_factura", e.target.value)}
-          className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900"
-        >
-          {TIPOS_FACTURA.map((t) => (
-            <option key={t} value={t}>
-              {t === "otro" ? "Otro" : t}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div>
-        <label className="block text-xs font-medium text-zinc-700">N.º de factura *</label>
-        <input
-          required
-          type="text"
-          value={form.numero_factura}
-          onChange={(e) => actualizar("numero_factura", e.target.value)}
-          className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900"
-        />
-      </div>
-      <div>
-        <label className="block text-xs font-medium text-zinc-700">Importe neto *</label>
-        <input
-          required
-          type="number"
-          min="0"
-          step="any"
-          value={form.importe_neto}
-          onChange={(e) => actualizar("importe_neto", e.target.value)}
-          className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900"
-        />
-      </div>
-      <div>
-        <label className="block text-xs font-medium text-zinc-700">IVA *</label>
-        <input
-          required
-          type="number"
-          min="0"
-          step="any"
-          value={form.iva}
-          onChange={(e) => actualizar("iva", e.target.value)}
-          className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900"
-        />
-      </div>
-      <div>
-        <label className="block text-xs font-medium text-zinc-700">Otros impuestos *</label>
-        <input
-          required
-          type="number"
-          min="0"
-          step="any"
-          value={form.otros_impuestos}
-          onChange={(e) => actualizar("otros_impuestos", e.target.value)}
-          className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900"
-        />
-        <p className="mt-1 text-xs text-zinc-400">Percepciones, IIBB, etc. Si no hay, poné 0.</p>
-      </div>
-      <div>
-        <label className="block text-xs font-medium text-zinc-700">
-          Importe total *{" "}
-          {!totalTocado && <span className="text-zinc-400">(neto + IVA + otros impuestos)</span>}
-        </label>
-        <input
-          required
-          type="number"
-          min="0"
-          step="any"
-          value={form.importe_total}
-          onChange={(e) => {
-            setTotalTocado(true);
-            actualizar("importe_total", e.target.value);
-          }}
-          className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900"
-        />
-      </div>
-      <div>
-        <label className="block text-xs font-medium text-zinc-700">Categoría *</label>
-        <select
-          required
-          value={form.categoria_id}
-          onChange={(e) => actualizar("categoria_id", e.target.value)}
-          className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900"
-        >
-          {categorias.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.nombre}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div>
-        <label className="block text-xs font-medium text-zinc-700">Estado de pago *</label>
-        <select
-          required
-          value={form.estado_pago}
-          onChange={(e) => actualizar("estado_pago", e.target.value)}
-          className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900"
-        >
-          <option value="pendiente">Pendiente</option>
-          <option value="pagada">Pagada</option>
-        </select>
-      </div>
-      <div className="sm:col-span-2">
-        <label className="block text-xs font-medium text-zinc-700">
-          Centro de costos (opcional)
-        </label>
-        <select
-          value={form.centro_costo_id}
-          onChange={(e) => actualizar("centro_costo_id", e.target.value)}
-          className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900"
-        >
-          <option value="">Sin imputar</option>
-          {centros.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.nombre}
-            </option>
-          ))}
-        </select>
-      </div>
-      {form.tipo_documento === "factura" && (
-        <div className="sm:col-span-2">
-          <label className="block text-xs font-medium text-zinc-700">
-            Orden de compra que la originó (opcional)
-          </label>
-          <select
-            value={form.orden_compra_id}
-            onChange={(e) => actualizar("orden_compra_id", e.target.value)}
-            disabled={!form.proveedor_id}
-            className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900 disabled:bg-zinc-100"
-          >
-            <option value="">Sin vincular</option>
-            {ordenesCompraDelProveedor.map((oc) => (
-              <option key={oc.id} value={oc.id}>
-                OC #{oc.numero} — {fechaLegible(oc.fecha)}
-              </option>
-            ))}
-          </select>
-          {!form.proveedor_id && (
-            <p className="mt-1 text-xs text-zinc-400">
-              Elegí un proveedor para ver sus órdenes de compra.
-            </p>
-          )}
-        </div>
-      )}
-      {form.tipo_documento === "nota_credito" && (
-        <div className="sm:col-span-2">
-          <label className="block text-xs font-medium text-zinc-700">
-            Factura que corrige (opcional)
-          </label>
-          <select
-            value={form.factura_id}
-            onChange={(e) => actualizar("factura_id", e.target.value)}
-            disabled={!form.proveedor_id}
-            className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900 disabled:bg-zinc-100"
-          >
-            <option value="">Nota suelta, sin factura asociada</option>
-            {facturasDelProveedor.map((f) => (
-              <option key={f.id} value={f.id}>
-                Factura {f.tipo_factura} n.º {f.numero_factura} — {fechaLegible(f.fecha)} —{" "}
-                {formatearMonto(f.importe_total)}
-              </option>
-            ))}
-          </select>
-          {!form.proveedor_id && (
-            <p className="mt-1 text-xs text-zinc-400">Elegí un proveedor para ver sus facturas.</p>
-          )}
-        </div>
-      )}
-    </div>
-  );
+// OR a mano para el buscador: PostgREST no permite filtrar por columnas de
+// una tabla relacionada (proveedor.nombre/cuit) dentro de un .or() salvo que
+// esté embebida en el select, así que se resuelve del lado del cliente con
+// la lista de proveedores que ya está en memoria.
+function condicionBusqueda(termino, proveedores) {
+  const limpio = termino.replace(/[,()]/g, "").trim();
+  if (!limpio) return null;
+  const buscado = limpio.toLowerCase();
+  const idsProveedor = proveedores
+    .filter(
+      (p) => p.nombre.toLowerCase().includes(buscado) || (p.cuit ?? "").includes(limpio)
+    )
+    .map((p) => p.id);
+  const condiciones = [`numero_factura.ilike.%${limpio}%`];
+  if (idsProveedor.length > 0) condiciones.push(`proveedor_id.in.(${idsProveedor.join(",")})`);
+  return condiciones.join(",");
 }
 
 function Factura({ factura, proveedores, categorias, centros, url, opNumero, onCambio }) {
@@ -512,6 +226,9 @@ function Factura({ factura, proveedores, categorias, centros, url, opNumero, onC
           )}
           <p className="mt-0.5 text-xs text-zinc-500">
             Centro de costos: {nombreCentro ?? "Sin imputar"}
+            {factura.centro_asignado_por_regla && (
+              <span className="ml-1 text-zinc-400">· asignado por regla</span>
+            )}
           </p>
           {!esNota && factura.orden_compra && (
             <p className="mt-0.5 text-xs text-zinc-500">
@@ -577,23 +294,6 @@ function Factura({ factura, proveedores, categorias, centros, url, opNumero, onC
   );
 }
 
-const FORM_INICIAL = {
-  tipo_documento: "factura",
-  proveedor_id: "",
-  tipo_factura: "A",
-  numero_factura: "",
-  fecha: hoyISO(),
-  importe_neto: "",
-  iva: "",
-  otros_impuestos: "0",
-  importe_total: "",
-  categoria_id: "",
-  estado_pago: "pendiente",
-  centro_costo_id: "",
-  factura_id: "",
-  orden_compra_id: "",
-};
-
 // Facturación de un año: por mes y por proveedor. Se recalcula al vuelo
 // con una consulta liviana (solo las columnas que hacen falta) cada vez
 // que cambia el año elegido — no se guarda nada de esto en la base, mismo
@@ -648,9 +348,9 @@ function ResumenFacturacion({ proveedores }) {
   const totalAnio = porMes.reduce((a, b) => a + b, 0);
 
   return (
-    <div className="mt-6 rounded-lg border border-zinc-200 bg-white p-5">
+    <>
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-lg font-semibold text-primary">Facturación por mes y por proveedor</h2>
+        <label className="text-sm text-zinc-600">Año</label>
         <input
           type="number"
           value={anio}
@@ -697,15 +397,13 @@ function ResumenFacturacion({ proveedores }) {
           </div>
         </>
       )}
-    </div>
+    </>
   );
 }
 
 export default function FacturasCompra() {
   const role = useRole();
   const puedeGestionar = role === "administrador" || role === "administracion";
-
-  const inputComprobanteRef = useRef(null);
 
   const [proveedores, setProveedores] = useState([]);
   const [categorias, setCategorias] = useState([]);
@@ -722,6 +420,16 @@ export default function FacturasCompra() {
   const [filtroTipoDocumento, setFiltroTipoDocumento] = useState("");
   const [filtroDesde, setFiltroDesde] = useState("");
   const [filtroHasta, setFiltroHasta] = useState("");
+  const [filtroAsignacion, setFiltroAsignacion] = useState("");
+  const [busqueda, setBusqueda] = useState("");
+  const [filtroBusqueda, setFiltroBusqueda] = useState("");
+
+  // Debounce: la búsqueda dispara la consulta 250ms después de que el
+  // usuario deja de tipear, para no pegarle a la base en cada tecla.
+  useEffect(() => {
+    const id = setTimeout(() => setFiltroBusqueda(busqueda.trim()), 250);
+    return () => clearTimeout(id);
+  }, [busqueda]);
 
   const [facturas, setFacturas] = useState([]);
   const [urls, setUrls] = useState({});
@@ -734,16 +442,10 @@ export default function FacturasCompra() {
   const [totalPendiente, setTotalPendiente] = useState(0);
   const [totalPagado, setTotalPagado] = useState(0);
 
-  const [mostrarNuevo, setMostrarNuevo] = useState(false);
-  const [nuevo, setNuevo] = useState(FORM_INICIAL);
-  const [comprobante, setComprobante] = useState(null);
-  const [guardando, setGuardando] = useState(false);
-  const [errorGuardado, setErrorGuardado] = useState(null);
-
   const cargarProveedores = useCallback(async () => {
     const { data } = await supabase
       .from("proveedores_nombre")
-      .select("id, nombre")
+      .select("id, nombre, cuit")
       .order("nombre");
     setProveedores(data ?? []);
   }, []);
@@ -755,10 +457,7 @@ export default function FacturasCompra() {
       .select("id, nombre")
       .eq("activo", true)
       .order("nombre")
-      .then(({ data }) => {
-        setCategorias(data ?? []);
-        setNuevo((f) => ({ ...f, categoria_id: f.categoria_id || data?.[0]?.id || "" }));
-      });
+      .then(({ data }) => setCategorias(data ?? []));
     supabase
       .from("centros_costo")
       .select("id, nombre")
@@ -770,6 +469,11 @@ export default function FacturasCompra() {
   const cargarFacturas = useCallback(async () => {
     setCargando(true);
 
+    // Con búsqueda activa se levanta el límite de paginación: el resultado
+    // ya viene acotado por el texto tipeado, no tiene sentido esconderlo
+    // detrás de "Ver facturas más viejas".
+    const limiteEfectivo = filtroBusqueda ? 500 : limite;
+
     let query = supabase
       .from("facturas_compra")
       .select(
@@ -777,7 +481,7 @@ export default function FacturasCompra() {
       )
       .order("fecha", { ascending: false })
       .order("created_at", { ascending: false })
-      .limit(limite + 1);
+      .limit(limiteEfectivo + 1);
 
     if (filtroProveedor) query = query.eq("proveedor_id", filtroProveedor);
     if (filtroEstado) query = query.eq("estado_pago", filtroEstado);
@@ -785,6 +489,9 @@ export default function FacturasCompra() {
     if (filtroTipoDocumento) query = query.eq("tipo_documento", filtroTipoDocumento);
     if (filtroDesde) query = query.gte("fecha", filtroDesde);
     if (filtroHasta) query = query.lte("fecha", filtroHasta);
+    if (filtroAsignacion === "regla") query = query.eq("centro_asignado_por_regla", true);
+    const condicion = condicionBusqueda(filtroBusqueda, proveedores);
+    if (condicion) query = query.or(condicion);
 
     const { data, error } = await query;
 
@@ -795,8 +502,8 @@ export default function FacturasCompra() {
     }
 
     setError(null);
-    setHayMas(data.length > limite);
-    const visibles = data.slice(0, limite);
+    setHayMas(data.length > limiteEfectivo);
+    const visibles = data.slice(0, limiteEfectivo);
     setFacturas(visibles);
 
     const rutas = visibles.map((f) => f.comprobante_ruta).filter(Boolean);
@@ -814,7 +521,18 @@ export default function FacturasCompra() {
     }
 
     setCargando(false);
-  }, [limite, filtroProveedor, filtroEstado, filtroCentro, filtroTipoDocumento, filtroDesde, filtroHasta]);
+  }, [
+    limite,
+    filtroProveedor,
+    filtroEstado,
+    filtroCentro,
+    filtroTipoDocumento,
+    filtroDesde,
+    filtroHasta,
+    filtroAsignacion,
+    filtroBusqueda,
+    proveedores,
+  ]);
 
   // Los totales reflejan proveedor, centro y fecha (para que "pendiente"
   // siga teniendo sentido aunque se esté mirando solo "pagadas", o solo
@@ -828,12 +546,14 @@ export default function FacturasCompra() {
     if (filtroCentro) query = query.eq("centro_costo_id", filtroCentro);
     if (filtroDesde) query = query.gte("fecha", filtroDesde);
     if (filtroHasta) query = query.lte("fecha", filtroHasta);
+    const condicion = condicionBusqueda(filtroBusqueda, proveedores);
+    if (condicion) query = query.or(condicion);
 
     const { data } = await query;
     setTotalRegistrado(sumaFirmada(data ?? []));
     setTotalPendiente(sumaFirmada((data ?? []).filter((f) => f.estado_pago === "pendiente")));
     setTotalPagado(sumaFirmada((data ?? []).filter((f) => f.estado_pago === "pagada")));
-  }, [filtroProveedor, filtroCentro, filtroDesde, filtroHasta]);
+  }, [filtroProveedor, filtroCentro, filtroDesde, filtroHasta, filtroBusqueda, proveedores]);
 
   // Qué facturas están pagadas por una Orden de pago CONFIRMADA (factura_id
   // -> número de OP) — mientras estén ahí, el toggle manual queda
@@ -853,7 +573,16 @@ export default function FacturasCompra() {
 
   useEffect(() => {
     setLimite(PAGINA);
-  }, [filtroProveedor, filtroEstado, filtroCentro, filtroTipoDocumento, filtroDesde, filtroHasta]);
+  }, [
+    filtroProveedor,
+    filtroEstado,
+    filtroCentro,
+    filtroTipoDocumento,
+    filtroDesde,
+    filtroHasta,
+    filtroAsignacion,
+    filtroBusqueda,
+  ]);
 
   useEffect(() => {
     cargarFacturas();
@@ -867,77 +596,6 @@ export default function FacturasCompra() {
     cargarOpPorFactura();
   }, [cargarOpPorFactura]);
 
-  async function handleAgregar(e) {
-    e.preventDefault();
-    if (
-      !nuevo.proveedor_id ||
-      !nuevo.numero_factura.trim() ||
-      !nuevo.categoria_id ||
-      nuevo.importe_neto === "" ||
-      nuevo.iva === "" ||
-      nuevo.otros_impuestos === "" ||
-      nuevo.importe_total === ""
-    ) {
-      return;
-    }
-
-    setGuardando(true);
-    setErrorGuardado(null);
-
-    const facturaId = crypto.randomUUID();
-    let comprobanteRuta = null;
-
-    if (comprobante) {
-      comprobanteRuta = `${facturaId}/${crypto.randomUUID()}-${comprobante.name}`;
-      const { error: errSubida } = await supabase.storage
-        .from(BUCKET)
-        .upload(comprobanteRuta, comprobante);
-
-      if (errSubida) {
-        setErrorGuardado(`No se pudo subir el comprobante: ${errSubida.message}`);
-        setGuardando(false);
-        return;
-      }
-    }
-
-    const { error } = await supabase.from("facturas_compra").insert({
-      id: facturaId,
-      tipo_documento: nuevo.tipo_documento,
-      proveedor_id: nuevo.proveedor_id,
-      tipo_factura: nuevo.tipo_factura,
-      numero_factura: nuevo.numero_factura.trim(),
-      fecha: nuevo.fecha,
-      importe_neto: Number(nuevo.importe_neto),
-      iva: Number(nuevo.iva),
-      otros_impuestos: Number(nuevo.otros_impuestos),
-      importe_total: Number(nuevo.importe_total),
-      categoria_id: nuevo.categoria_id,
-      estado_pago: nuevo.estado_pago,
-      centro_costo_id: nuevo.centro_costo_id || null,
-      factura_id: nuevo.tipo_documento === "nota_credito" ? nuevo.factura_id || null : null,
-      orden_compra_id: nuevo.tipo_documento === "factura" ? nuevo.orden_compra_id || null : null,
-      comprobante_ruta: comprobanteRuta,
-    });
-
-    if (error) {
-      if (comprobanteRuta) await supabase.storage.from(BUCKET).remove([comprobanteRuta]);
-      setErrorGuardado(
-        error.code === "23505"
-          ? "Ya existe un documento cargado con ese proveedor, tipo de documento, tipo y número."
-          : error.message
-      );
-      setGuardando(false);
-      return;
-    }
-
-    setNuevo((f) => ({ ...FORM_INICIAL, categoria_id: f.categoria_id }));
-    setComprobante(null);
-    if (inputComprobanteRef.current) inputComprobanteRef.current.value = "";
-    setGuardando(false);
-    setMostrarNuevo(false);
-    await Promise.all([cargarFacturas(), cargarTotales(), cargarOpPorFactura()]);
-  }
-
   async function recargarTodo() {
     await Promise.all([cargarFacturas(), cargarTotales(), cargarOpPorFactura()]);
   }
@@ -950,7 +608,7 @@ export default function FacturasCompra() {
 
   if (!puedeGestionar) {
     return (
-      <div className="min-h-screen bg-zinc-50 p-8 font-sans">
+      <div className="min-h-screen bg-zinc-50 p-4 font-sans sm:p-8">
         <div className="mx-auto max-w-3xl">
           <p className="text-zinc-600">No tenés acceso a esta pantalla.</p>
         </div>
@@ -959,7 +617,7 @@ export default function FacturasCompra() {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-50 p-8 font-sans">
+    <div className="min-h-screen bg-zinc-50 p-4 font-sans sm:p-8">
       <div className="mx-auto max-w-4xl">
         <h1 className="text-2xl font-semibold text-primary">Facturas de compra</h1>
         <p className="mt-1 text-sm text-zinc-500">
@@ -992,79 +650,25 @@ export default function FacturasCompra() {
           costos y fechas).
         </p>
 
-        {/* Carga de factura */}
-        {!mostrarNuevo && (
-          <div className="mt-6 flex justify-end">
-            <button
-              type="button"
-              onClick={() => setMostrarNuevo(true)}
-              className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90"
-            >
-              + Cargar factura o nota de crédito
-            </button>
-          </div>
-        )}
-
-        {mostrarNuevo && (
-        <form
-          onSubmit={handleAgregar}
-          className="mt-6 rounded-lg border border-zinc-200 bg-white p-5"
-        >
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-primary">Nuevo documento</h2>
-            <button
-              type="button"
-              onClick={() => setMostrarNuevo(false)}
-              className="text-sm text-zinc-500 hover:text-zinc-800"
-            >
-              Cancelar
-            </button>
-          </div>
-
-          <div className="mt-4">
-            <CamposFactura
-              form={nuevo}
-              setForm={setNuevo}
-              proveedores={proveedores}
-              categorias={categorias}
-              centros={centros}
-            />
-
-            <div className="mt-3">
-              <label className="block text-xs font-medium text-zinc-700">
-                Comprobante (foto o PDF, opcional)
-              </label>
-              <input
-                ref={inputComprobanteRef}
-                type="file"
-                accept=".pdf,image/png,image/jpeg,image/webp,image/heic"
-                onChange={(e) => setComprobante(e.target.files?.[0] ?? null)}
-                className="mt-1 block w-full text-sm text-zinc-700 file:mr-3 file:rounded-md file:border-0 file:bg-zinc-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-zinc-700"
-              />
-            </div>
-          </div>
-
-          {errorGuardado && (
-            <p className="mt-3 rounded-md bg-accent/10 px-3 py-2 text-sm text-accent">
-              {errorGuardado}
-            </p>
-          )}
-
-          <button
-            type="submit"
-            disabled={guardando}
-            className="mt-4 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90 disabled:opacity-50"
+        <div className="mt-4 flex justify-end sm:mt-6">
+          <Link
+            href="/facturas-compra/nueva"
+            className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90"
           >
-            {guardando ? "Guardando..." : "Agregar documento"}
-          </button>
-        </form>
-        )}
+            + Cargar factura o nota de crédito
+          </Link>
+        </div>
 
         <ImportarComprobantesArca onImportado={handleImportado} />
 
-        {/* Filtros y listado */}
-        <div className="mt-6 rounded-lg border border-zinc-200 bg-white p-5">
-          <h2 className="text-lg font-semibold text-primary">Facturas y notas de crédito</h2>
+        <Seccion titulo="Facturas y notas de crédito" defaultAbierto>
+          <input
+            type="text"
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)}
+            placeholder="Buscar por proveedor, CUIT o N.º de factura..."
+            className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
+          />
 
           <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-4">
             <select
@@ -1123,6 +727,14 @@ export default function FacturasCompra() {
               placeholder="Hasta"
               className="rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900"
             />
+            <select
+              value={filtroAsignacion}
+              onChange={(e) => setFiltroAsignacion(e.target.value)}
+              className="rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900"
+            >
+              <option value="">Cualquier imputación</option>
+              <option value="regla">Asignadas por regla (revisar)</option>
+            </select>
           </div>
 
           {error && (
@@ -1160,9 +772,11 @@ export default function FacturasCompra() {
               Ver facturas más viejas
             </button>
           )}
-        </div>
+        </Seccion>
 
-        <ResumenFacturacion proveedores={proveedores} />
+        <Seccion titulo="Facturación por mes y por proveedor">
+          <ResumenFacturacion proveedores={proveedores} />
+        </Seccion>
       </div>
     </div>
   );

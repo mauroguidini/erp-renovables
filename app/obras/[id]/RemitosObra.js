@@ -351,18 +351,17 @@ export default function RemitosObra({ obraId }) {
   }
 
   return (
-    <div className="mt-6 rounded-lg border border-zinc-200 bg-white p-5">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-primary">Remitos</h2>
-        {puedeGestionar && (
+    <>
+      {puedeGestionar && (
+        <div className="flex justify-end print:hidden">
           <button
             onClick={() => setMostrarForm((v) => !v)}
-            className="text-sm font-medium text-primary hover:underline print:hidden"
+            className="text-sm font-medium text-primary hover:underline"
           >
             {mostrarForm ? "Cancelar" : "+ Nuevo remito"}
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
       {mostrarForm && puedeGestionar && (
         <form
@@ -437,6 +436,6 @@ export default function RemitosObra({ obraId }) {
           />
         ))}
       </div>
-    </div>
+    </>
   );
 }

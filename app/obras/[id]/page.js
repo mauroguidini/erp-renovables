@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { useRole } from "../../RoleContext";
+import Seccion from "../../Seccion";
 import OrdenesTrabajo from "./OrdenesTrabajo";
 import RemitosObra from "./RemitosObra";
 import Hitos from "./Hitos";
@@ -219,7 +220,7 @@ function DetalleObraCompleto({ id, role }) {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-50 p-8 font-sans">
+    <div className="min-h-screen bg-zinc-50 p-4 font-sans sm:p-8">
       <div className="mx-auto max-w-3xl">
         <button
           onClick={() => router.push("/obras")}
@@ -271,11 +272,10 @@ function DetalleObraCompleto({ id, role }) {
 
         <ResumenOt obraId={id} />
 
-        {!editando && (
-          <>
-            <div className="mt-6 rounded-lg border border-zinc-200 bg-white p-5">
-              <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-primary">Obra</h2>
+        <Seccion titulo="Obra">
+          {!editando ? (
+            <>
+              <div className="flex justify-end">
                 {puedeGestionar && (
                   <button
                     onClick={iniciarEdicion}
@@ -285,7 +285,7 @@ function DetalleObraCompleto({ id, role }) {
                   </button>
                 )}
               </div>
-              <dl className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <dl className="mt-2 grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <Dato etiqueta="Tipo de obra" valor={tipoObraActual?.nombre} />
                 {esSolarObra && (
                   <Dato etiqueta="Potencia instalada" valor={`${obra.potencia_kwp} kWp`} />
@@ -297,35 +297,10 @@ function DetalleObraCompleto({ id, role }) {
                 <Dato etiqueta="Fecha de inicio" valor={obra.fecha_inicio} />
                 <Dato etiqueta="Fecha de fin estimada" valor={obra.fecha_fin_estimada} />
               </dl>
-            </div>
-
-            <div className="mt-6 rounded-lg border border-zinc-200 bg-white p-5">
-              <h2 className="text-lg font-semibold text-primary">Cliente</h2>
-              <dl className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <Dato
-                  etiqueta="Nombre"
-                  valor={
-                    clienteDetalle?.nombre ??
-                    clientes.find((c) => c.id === obra.cliente_id)?.nombre
-                  }
-                />
-                <Dato etiqueta="Teléfono" valor={clienteDetalle?.contacto_telefono} />
-                <Dato etiqueta="Email" valor={clienteDetalle?.contacto_email} />
-                <Dato etiqueta="Dirección" valor={clienteDetalle?.direccion} />
-                <Dato etiqueta="CUIT / DNI" valor={clienteDetalle?.cuit} />
-              </dl>
-            </div>
-          </>
-        )}
-
-        {editando && (
-          <form
-            onSubmit={handleGuardarEdicion}
-            className="mt-6 rounded-lg border border-zinc-200 bg-white p-5"
-          >
-            <h2 className="text-lg font-semibold text-primary">Editar obra</h2>
-
-            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+            </>
+          ) : (
+          <form onSubmit={handleGuardarEdicion}>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="sm:col-span-2">
                 <label className="block text-sm font-medium text-zinc-700">
                   Cliente *
@@ -456,23 +431,58 @@ function DetalleObraCompleto({ id, role }) {
               </button>
             </div>
           </form>
+          )}
+        </Seccion>
+
+        <Seccion titulo="Cliente">
+          <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Dato
+              etiqueta="Nombre"
+              valor={
+                clienteDetalle?.nombre ??
+                clientes.find((c) => c.id === obra.cliente_id)?.nombre
+              }
+            />
+            <Dato etiqueta="Teléfono" valor={clienteDetalle?.contacto_telefono} />
+            <Dato etiqueta="Email" valor={clienteDetalle?.contacto_email} />
+            <Dato etiqueta="Dirección" valor={clienteDetalle?.direccion} />
+            <Dato etiqueta="CUIT / DNI" valor={clienteDetalle?.cuit} />
+          </dl>
+        </Seccion>
+
+        <Seccion titulo="Archivos">
+          <ArchivosObra obraId={id} />
+        </Seccion>
+
+        <Seccion titulo="Remitos">
+          <RemitosObra obraId={id} />
+        </Seccion>
+
+        <Seccion titulo="Hitos">
+          <Hitos obraId={id} hitos={hitos} onCambio={cargarHitos} />
+        </Seccion>
+
+        <Seccion titulo="Parte de asistencia">
+          <ParteAsistencia obraId={id} />
+        </Seccion>
+
+        <Seccion titulo="Trabajo diario">
+          <TrabajoDiario obraId={id} obraNombre={obra.direccion} />
+        </Seccion>
+
+        <Seccion titulo="Rendiciones">
+          <GastosObra obraId={id} obraNombre={obra.direccion} />
+        </Seccion>
+
+        <Seccion titulo="Órdenes de trabajo">
+          <OrdenesTrabajo obraId={id} hitos={hitos} onHitosCambio={cargarHitos} />
+        </Seccion>
+
+        {puedeGestionar && (
+          <Seccion titulo="Zona peligrosa" tono="peligro">
+            <ZonaPeligrosaObra obra={obra} onCambio={cargarObra} />
+          </Seccion>
         )}
-
-        <ArchivosObra obraId={id} />
-
-        <RemitosObra obraId={id} />
-
-        <Hitos obraId={id} hitos={hitos} onCambio={cargarHitos} />
-
-        <ParteAsistencia obraId={id} />
-
-        <TrabajoDiario obraId={id} obraNombre={obra.direccion} />
-
-        <GastosObra obraId={id} obraNombre={obra.direccion} />
-
-        <OrdenesTrabajo obraId={id} hitos={hitos} onHitosCambio={cargarHitos} />
-
-        <ZonaPeligrosaObra obra={obra} onCambio={cargarObra} />
       </div>
     </div>
   );

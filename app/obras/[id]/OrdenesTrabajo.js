@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { ESTADOS, MOTIVOS, TIPOS } from "../../otConstants";
 import { useRole } from "../../RoleContext";
 import ImportarPlanTrabajo from "./ImportarPlanTrabajo";
+import PedidoMaterialOt from "./PedidoMaterialOt";
 
 const valoresIniciales = {
   descripcion: "",
@@ -128,6 +129,7 @@ function OtCard({
   todasLasOts,
   obraId,
   empleados,
+  productos,
   hitos,
   puedeGestionar,
   puedeMarcarEstado,
@@ -222,9 +224,9 @@ function OtCard({
       )}
 
       {otCerrada && ot.estado === "cumplida" && (
-        <div className="mt-2 rounded-md bg-green-50 p-3 text-sm text-green-800">
-          <p className="font-medium">Esta OT está cumplida y cerrada.</p>
-          <p className="mt-0.5 text-xs">
+        <div className="mt-2 rounded-md bg-green-50 px-2.5 py-1.5 text-xs text-green-700">
+          <p className="font-medium">Cumplida y cerrada.</p>
+          <p className="mt-0.5">
             {ot.cumplidaPor
               ? `Marcada por ${ot.cumplidaPor.email} el ${new Date(
                   ot.cumplidaPor.fecha
@@ -237,9 +239,9 @@ function OtCard({
       )}
 
       {ot.estado === "reemplazada" && (
-        <div className="mt-2 rounded-md bg-zinc-100 p-3 text-sm text-zinc-700">
-          <p className="font-medium">Esta OT fue reemplazada.</p>
-          <p className="mt-0.5 text-xs">
+        <div className="mt-2 rounded-md bg-zinc-100 px-2.5 py-1.5 text-xs text-zinc-600">
+          <p className="font-medium">Reemplazada.</p>
+          <p className="mt-0.5">
             {reemplazadaPor
               ? `Reemplazada por la OT #${reemplazadaPor.numero} — ${reemplazadaPor.descripcion}. `
               : ""}
@@ -396,6 +398,8 @@ function OtCard({
         </div>
       )}
 
+      <PedidoMaterialOt otId={ot.id} productos={productos} puedePedir={puedeMarcarEstado} />
+
       <HistorialOt otId={ot.id} />
     </div>
   );
@@ -539,6 +543,7 @@ export default function OrdenesTrabajo({ obraId, hitos, onHitosCambio }) {
 
   const [ots, setOts] = useState([]);
   const [empleados, setEmpleados] = useState([]);
+  const [productos, setProductos] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(null);
 
@@ -591,6 +596,15 @@ export default function OrdenesTrabajo({ obraId, hitos, onHitosCambio }) {
   useEffect(() => {
     cargarOts();
   }, [cargarOts]);
+
+  useEffect(() => {
+    if (!puedeMarcarEstado) return;
+    supabase
+      .from("productos")
+      .select("id, nombre")
+      .order("nombre")
+      .then(({ data }) => setProductos(data ?? []));
+  }, [puedeMarcarEstado]);
 
   useEffect(() => {
     if (!puedeGestionar) return;
@@ -792,6 +806,7 @@ export default function OrdenesTrabajo({ obraId, hitos, onHitosCambio }) {
     todasLasOts: ots,
     obraId,
     empleados,
+    productos,
     hitos,
     puedeGestionar,
     puedeMarcarEstado,
@@ -814,20 +829,17 @@ export default function OrdenesTrabajo({ obraId, hitos, onHitosCambio }) {
         ].filter((g) => g.hito || g.ots.length > 0);
 
   return (
-    <div className="mt-6 rounded-lg border border-zinc-200 bg-white p-5">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-primary">
-          Órdenes de trabajo
-        </h2>
-        {puedeGestionar && (
+    <>
+      {puedeGestionar && (
+        <div className="flex justify-end">
           <button
             onClick={() => setMostrarForm((v) => !v)}
             className="text-sm font-medium text-primary hover:underline"
           >
             {mostrarForm ? "Cancelar" : "+ Nueva OT"}
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
       {puedeGestionar && (
         <ImportarPlanTrabajo
@@ -996,6 +1008,6 @@ export default function OrdenesTrabajo({ obraId, hitos, onHitosCambio }) {
           ))}
         </div>
       )}
-    </div>
+    </>
   );
 }

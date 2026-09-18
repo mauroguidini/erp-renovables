@@ -23,6 +23,11 @@ export default function OrdenesPago() {
   const puedeGestionar = role === "administrador" || role === "administracion";
 
   const [ordenes, setOrdenes] = useState([]);
+  // Una OP por transferencia puede tener MÁS de un movimiento bancario
+  // atrás (si se agruparon varias transferencias en un mismo pago) — por
+  // eso esto es un mapa orden_pago_id -> [movimientos], armado con una
+  // consulta aparte en vez de embeber una relación 1-a-1 que ya no existe.
+  const [movimientosPorOp, setMovimientosPorOp] = useState({});
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(null);
 
@@ -32,9 +37,31 @@ export default function OrdenesPago() {
       .from("ordenes_pago")
       .select("*, proveedores(nombre)")
       .order("numero", { ascending: false });
-    if (error) setError(error.message);
-    else setError(null);
+    if (error) {
+      setError(error.message);
+      setCargando(false);
+      return;
+    }
+    setError(null);
     setOrdenes(data ?? []);
+
+    const idsTransferencia = (data ?? [])
+      .filter((o) => o.medio_pago === "transferencia")
+      .map((o) => o.id);
+    if (idsTransferencia.length > 0) {
+      const { data: movimientos } = await supabase
+        .from("movimientos_bancarios")
+        .select("orden_pago_id, numero_comprobante, bancos(nombre)")
+        .in("orden_pago_id", idsTransferencia);
+      const mapa = {};
+      for (const m of movimientos ?? []) {
+        (mapa[m.orden_pago_id] ??= []).push(m);
+      }
+      setMovimientosPorOp(mapa);
+    } else {
+      setMovimientosPorOp({});
+    }
+
     setCargando(false);
   }, []);
 
@@ -92,6 +119,19 @@ export default function OrdenesPago() {
                     </Link>
                     <p className="mt-0.5 text-xs text-zinc-500">
                       {fechaLegible(o.fecha)} · {formatearMonto(o.total)}
+                      {o.medio_pago === "transferencia" && (
+                        <>
+                          {" "}
+                          · Transferencia
+                          {(movimientosPorOp[o.id] ?? []).map((m, i) => (
+                            <span key={i}>
+                              {i === 0 ? " — " : " + "}
+                              {m.bancos?.nombre ?? "Banco"}
+                              {m.numero_comprobante && ` (comp. ${m.numero_comprobante})`}
+                            </span>
+                          ))}
+                        </>
+                      )}
                     </p>
                   </div>
                   <span

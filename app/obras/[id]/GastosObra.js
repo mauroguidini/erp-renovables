@@ -430,9 +430,11 @@ export default function GastosObra({ obraId, obraNombre }) {
   const total = gastos.reduce((acc, g) => acc + Number(g.monto), 0);
 
   return (
-    <div className="mt-6 rounded-lg border border-zinc-200 bg-white p-5">
+    <>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-lg font-semibold text-primary">Rendiciones</h2>
+        <p className="text-sm text-zinc-500">
+          Registro de gastos de la obra. Todavía sin circuito de aprobación.
+        </p>
         <div className="flex items-center gap-3">
           {!cargando && !error && (
             <span className="rounded-full bg-zinc-100 px-3 py-1 text-sm font-medium text-zinc-700">
@@ -449,9 +451,6 @@ export default function GastosObra({ obraId, obraNombre }) {
           )}
         </div>
       </div>
-      <p className="mt-1 text-sm text-zinc-500">
-        Registro de gastos de la obra. Todavía sin circuito de aprobación.
-      </p>
 
       {puedeRegistrar && (
         <form
@@ -582,6 +581,6 @@ export default function GastosObra({ obraId, obraNombre }) {
           ))}
         </div>
       )}
-    </div>
+    </>
   );
 }

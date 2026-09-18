@@ -295,9 +295,8 @@ export default function ParteAsistencia({ obraId }) {
   const puedeEditar = !!parte && (esAdmin || (puedeRegistrar && parte.estado === "abierto"));
 
   return (
-    <div className="mt-6 rounded-lg border border-zinc-200 bg-white p-5">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-lg font-semibold text-primary">Parte de asistencia</h2>
+    <>
+      <div className="flex flex-wrap items-center justify-end gap-2">
         <input
           type="date"
           value={fecha}
@@ -370,9 +369,9 @@ export default function ParteAsistencia({ obraId }) {
           )}
 
           {parte.estado === "cerrado" && !esAdmin && (
-            <div className="mt-2 rounded-md bg-green-50 p-3 text-sm text-green-800">
+            <p className="mt-2 rounded-md bg-green-50 px-2.5 py-1.5 text-xs text-green-700">
               Este parte ya está cerrado. Solo un administrador puede corregirlo.
-            </div>
+            </p>
           )}
 
           <div className="mt-3 divide-y divide-zinc-100">
@@ -464,6 +463,6 @@ export default function ParteAsistencia({ obraId }) {
           <HistorialParte parteId={parte.id} />
         </div>
       )}
-    </div>
+    </>
   );
 }

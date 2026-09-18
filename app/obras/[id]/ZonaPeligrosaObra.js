@@ -140,10 +140,8 @@ export default function ZonaPeligrosaObra({ obra, onCambio }) {
     resumen && (!requiereConfirmacionFuerte || confirmacionTexto.trim() === obra.direccion);
 
   return (
-    <div className="mt-6 rounded-lg border border-accent/30 bg-white p-5">
-      <h2 className="text-lg font-semibold text-accent">Zona peligrosa</h2>
-
-      <div className="mt-4 flex items-center justify-between rounded-md border border-zinc-200 p-3">
+    <>
+      <div className="flex items-center justify-between rounded-md border border-zinc-200 p-3">
         <div>
           <p className="text-sm font-medium text-zinc-900">
             {obra.archivada ? "Esta obra está archivada" : "Archivar obra"}
@@ -245,6 +243,6 @@ export default function ZonaPeligrosaObra({ obra, onCambio }) {
           )}
         </div>
       )}
-    </div>
+    </>
   );
 }

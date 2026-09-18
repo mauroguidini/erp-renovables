@@ -380,9 +380,10 @@ export default function ImportarComprobantesArca({ onImportado }) {
         categoria_id: v.categoria_id,
       }));
 
-      const { error: errFacturas } = await supabase
+      const { data: insertados, error: errFacturas } = await supabase
         .from("facturas_compra")
-        .insert(filasAInsertar);
+        .insert(filasAInsertar)
+        .select("centro_asignado_por_regla");
 
       if (errFacturas) {
         throw new Error(
@@ -392,10 +393,19 @@ export default function ImportarComprobantesArca({ onImportado }) {
         );
       }
 
+      // Cuántas quedaron con centro de costos puesto solas, por ser de un
+      // proveedor habitual de un único centro (ver "Proveedores
+      // habituales" en Centros de costos) — para que quede claro que
+      // conviene revisarlas.
+      const asignadasPorRegla = (insertados ?? []).filter((f) => f.centro_asignado_por_regla).length;
+
       setExito(
         `Se importaron ${filasAInsertar.length} comprobantes. ` +
           `Se saltearon ${resultado.duplicados.length} por estar duplicados. ` +
-          `Se crearon ${nuevosArray.length} proveedores nuevos.`
+          `Se crearon ${nuevosArray.length} proveedores nuevos.` +
+          (asignadasPorRegla > 0
+            ? ` ${asignadasPorRegla} se imputaron solas a un centro de costos por proveedor habitual — revisalas en Facturas de compra con el filtro "Asignadas por regla".`
+            : "")
       );
       setResultado(null);
       onImportado?.();

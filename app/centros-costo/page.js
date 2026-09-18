@@ -1,9 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import { useRole } from "../RoleContext";
+import Seccion from "../Seccion";
 import ImportarCentrosCosto from "./ImportarCentrosCosto";
+import FormularioCentro from "./FormularioCentro";
 
 const MESES = [
   "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
@@ -44,76 +47,6 @@ function rangoFechas(anio, mes) {
   const ultimoDia = new Date(anio, mesNum, 0).getDate();
   const mm = String(mesNum).padStart(2, "0");
   return { desde: `${anio}-${mm}-01`, hasta: `${anio}-${mm}-${String(ultimoDia).padStart(2, "0")}` };
-}
-
-function FormularioCentro({ form, setForm, obras }) {
-  return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-      <div>
-        <label className="block text-xs font-medium text-zinc-700">Número *</label>
-        <input
-          required
-          type="number"
-          step="1"
-          value={form.numero}
-          onChange={(e) => setForm((f) => ({ ...f, numero: e.target.value }))}
-          placeholder="Ej: 100"
-          className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900"
-        />
-      </div>
-      <div>
-        <label className="block text-xs font-medium text-zinc-700">Nombre *</label>
-        <input
-          required
-          type="text"
-          value={form.nombre}
-          onChange={(e) => setForm((f) => ({ ...f, nombre: e.target.value }))}
-          placeholder='Ej: "Vehículos" o "Obra Cangallo"'
-          className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900"
-        />
-      </div>
-      <div>
-        <label className="block text-xs font-medium text-zinc-700">Tipo *</label>
-        <select
-          required
-          value={form.tipo}
-          onChange={(e) =>
-            setForm((f) => ({
-              ...f,
-              tipo: e.target.value,
-              obra_id: e.target.value === "general" ? "" : f.obra_id,
-            }))
-          }
-          className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900"
-        >
-          <option value="obra">Obra</option>
-          <option value="general">General</option>
-        </select>
-      </div>
-      {form.tipo === "obra" && (
-        <div className="sm:col-span-2">
-          <label className="block text-xs font-medium text-zinc-700">
-            Obra vinculada (opcional)
-          </label>
-          <select
-            value={form.obra_id}
-            onChange={(e) => setForm((f) => ({ ...f, obra_id: e.target.value }))}
-            className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900"
-          >
-            <option value="">Sin vincular todavía</option>
-            {obras.map((o) => (
-              <option key={o.id} value={o.id}>
-                {o.direccion}
-              </option>
-            ))}
-          </select>
-          <p className="mt-1 text-xs text-zinc-400">
-            Se puede dejar sin vincular y completar después, cuando la obra exista en el sistema.
-          </p>
-        </div>
-      )}
-    </div>
-  );
 }
 
 function Centro({ centro, obras, onCambio }) {
@@ -215,6 +148,12 @@ function Centro({ centro, obras, onCambio }) {
         </p>
       </div>
       <div className="flex items-center gap-3">
+        <Link
+          href={`/centros-costo/${centro.id}`}
+          className="text-xs font-medium text-zinc-500 hover:text-primary hover:underline"
+        >
+          Ver gastos
+        </Link>
         <button onClick={handleToggleActivo} disabled={guardando} className="text-xs font-medium text-zinc-500 hover:text-primary hover:underline disabled:opacity-50">
           {centro.activo ? "Desactivar" : "Activar"}
         </button>
@@ -286,6 +225,25 @@ function DetalleCentro({ centroId, desde, hasta }) {
 function FilaTotal({ nombre, total, centroId, desde, hasta }) {
   const [abierto, setAbierto] = useState(false);
 
+  // Un centro real linkea a su vista de detalle (filtros, agrupados y
+  // buscador) — "Sin centro asignado" no tiene id, así que se queda con el
+  // acordeón simple de siempre.
+  if (centroId !== null) {
+    return (
+      <div className="py-3">
+        <div className="flex items-center justify-between gap-2">
+          <Link
+            href={`/centros-costo/${centroId}`}
+            className="text-left text-sm font-medium text-zinc-900 hover:text-primary hover:underline"
+          >
+            {nombre}
+          </Link>
+          <span className="text-sm font-semibold text-zinc-900">{formatearMonto(total)}</span>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="py-3">
       <div className="flex items-center justify-between gap-2">
@@ -311,14 +269,14 @@ export default function CentrosCosto() {
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(null);
 
-  const [nuevo, setNuevo] = useState({ numero: "", nombre: "", tipo: "obra", obra_id: "" });
-  const [guardando, setGuardando] = useState(false);
-  const [errorGuardado, setErrorGuardado] = useState(null);
-
   const [anio, setAnio] = useState(anioActual());
   const [mes, setMes] = useState("");
   const [totales, setTotales] = useState(null);
   const [cargandoTotales, setCargandoTotales] = useState(true);
+
+  const [aplicandoRegla, setAplicandoRegla] = useState(false);
+  const [mensajeRegla, setMensajeRegla] = useState(null);
+  const [errorRegla, setErrorRegla] = useState(null);
 
   const cargarCentros = useCallback(async () => {
     setCargando(true);
@@ -369,38 +327,40 @@ export default function CentrosCosto() {
     cargarTotales();
   }, [cargarTotales]);
 
-  async function handleAgregar(e) {
-    e.preventDefault();
-    if (!nuevo.nombre.trim() || nuevo.numero === "") return;
+  // Pasada única (058): la regla de "proveedor habitual" (057) solo actúa
+  // al insertar una factura nueva — esto reprocesa las que ya estaban
+  // cargadas sin centro, para las que recién ahora tienen un proveedor
+  // habitual asignado a un único centro.
+  async function handleAplicarRegla() {
+    const confirmado = window.confirm(
+      "Esto va a imputar automáticamente todas las facturas sin centro cuyo proveedor sea habitual de un solo centro. ¿Continuar?"
+    );
+    if (!confirmado) return;
 
-    setGuardando(true);
-    setErrorGuardado(null);
+    setAplicandoRegla(true);
+    setErrorRegla(null);
+    setMensajeRegla(null);
 
-    const { error } = await supabase.from("centros_costo").insert({
-      numero: Number(nuevo.numero),
-      nombre: nuevo.nombre.trim(),
-      tipo: nuevo.tipo,
-      obra_id: nuevo.tipo === "obra" ? nuevo.obra_id || null : null,
-    });
+    const { data, error } = await supabase.rpc("aplicar_regla_centro_costo_historico");
 
     if (error) {
-      setErrorGuardado(
-        error.code === "23505"
-          ? "Ya existe un centro con ese número o ese nombre (u otro ya vinculado a esa obra)."
-          : error.message
-      );
-      setGuardando(false);
+      setErrorRegla(error.message);
+      setAplicandoRegla(false);
       return;
     }
 
-    setNuevo({ numero: "", nombre: "", tipo: "obra", obra_id: "" });
-    setGuardando(false);
-    await Promise.all([cargarCentros(), cargarTotales()]);
+    setMensajeRegla(
+      data > 0
+        ? `Se imputaron ${data} facturas que estaban sin centro.`
+        : "No había facturas para imputar con la regla actual."
+    );
+    setAplicandoRegla(false);
+    await cargarTotales();
   }
 
   if (!puedeGestionar) {
     return (
-      <div className="min-h-screen bg-zinc-50 p-8 font-sans">
+      <div className="min-h-screen bg-zinc-50 p-4 font-sans sm:p-8">
         <div className="mx-auto max-w-3xl">
           <p className="text-zinc-600">No tenés acceso a esta pantalla.</p>
         </div>
@@ -413,7 +373,7 @@ export default function CentrosCosto() {
     Object.values(totales?.porCentro ?? {}).reduce((a, b) => a + b, 0) + (totales?.sinCentro ?? 0);
 
   return (
-    <div className="min-h-screen bg-zinc-50 p-8 font-sans">
+    <div className="min-h-screen bg-zinc-50 p-4 font-sans sm:p-8">
       <div className="mx-auto max-w-3xl">
         <h1 className="text-2xl font-semibold text-primary">Centros de costos</h1>
         <p className="mt-1 text-sm text-zinc-500">
@@ -421,37 +381,47 @@ export default function CentrosCosto() {
           compra imputadas — sin comparación contra presupuesto todavía.
         </p>
 
-        {/* Alta de centro */}
-        <form
-          onSubmit={handleAgregar}
-          className="mt-6 rounded-lg border border-zinc-200 bg-white p-5"
-        >
-          <h2 className="text-lg font-semibold text-primary">Nuevo centro</h2>
-          <div className="mt-4">
-            <FormularioCentro form={nuevo} setForm={setNuevo} obras={obras} />
-          </div>
+        <div className="mt-4 flex justify-end sm:mt-6">
+          <Link
+            href="/centros-costo/nueva"
+            className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90"
+          >
+            + Nuevo centro
+          </Link>
+        </div>
 
-          {errorGuardado && (
+        <ImportarCentrosCosto obras={obras} onCentrosImportados={cargarCentros} />
+
+        <Seccion titulo="Aplicar proveedores habituales a facturas ya cargadas">
+          <p className="text-sm text-zinc-500">
+            La imputación automática por proveedor habitual solo actúa en facturas nuevas. Usá
+            esto después de agregar o cambiar proveedores habituales de un centro, para que las
+            facturas que ya estaban cargadas sin centro se imputen también (solo si su proveedor
+            es habitual de un único centro).
+          </p>
+
+          {errorRegla && (
             <p className="mt-3 rounded-md bg-accent/10 px-3 py-2 text-sm text-accent">
-              {errorGuardado}
+              {errorRegla}
+            </p>
+          )}
+          {mensajeRegla && (
+            <p className="mt-3 rounded-md bg-green-50 px-3 py-2 text-sm text-green-800">
+              {mensajeRegla}
             </p>
           )}
 
           <button
-            type="submit"
-            disabled={guardando}
+            type="button"
+            onClick={handleAplicarRegla}
+            disabled={aplicandoRegla}
             className="mt-4 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90 disabled:opacity-50"
           >
-            {guardando ? "Guardando..." : "Agregar centro"}
+            {aplicandoRegla ? "Aplicando..." : "Aplicar a facturas sin centro"}
           </button>
-        </form>
+        </Seccion>
 
-        <ImportarCentrosCosto obras={obras} onCentrosImportados={cargarCentros} />
-
-        {/* Lista de centros */}
-        <div className="mt-6 rounded-lg border border-zinc-200 bg-white p-5">
-          <h2 className="text-lg font-semibold text-primary">Centros</h2>
-
+        <Seccion titulo="Centros" defaultAbierto>
           {error && (
             <p className="mt-3 rounded-md bg-accent/10 px-3 py-2 text-sm text-accent">{error}</p>
           )}
@@ -469,12 +439,10 @@ export default function CentrosCosto() {
               ))}
             </div>
           )}
-        </div>
+        </Seccion>
 
-        {/* Costos por centro y período */}
-        <div className="mt-6 rounded-lg border border-zinc-200 bg-white p-5">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 className="text-lg font-semibold text-primary">Costos por período</h2>
+        <Seccion titulo="Costos por período" defaultAbierto>
+          <div className="flex flex-wrap items-center justify-end gap-3">
             <div className="flex gap-2">
               <select
                 value={mes}
@@ -527,7 +495,7 @@ export default function CentrosCosto() {
               </div>
             </>
           )}
-        </div>
+        </Seccion>
       </div>
     </div>
   );

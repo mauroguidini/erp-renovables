@@ -1,13 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import { useRole } from "../RoleContext";
+import Seccion from "../Seccion";
 import ImportarComprobantesArcaVenta from "./ImportarComprobantesArcaVenta";
+import CamposFacturaVenta, { fechaLegible, formatearMonto } from "./CamposFacturaVenta";
 
 const BUCKET = "facturas-venta";
 const PAGINA = 20;
-const TIPOS_FACTURA = ["A", "B", "C", "otro"];
 const MESES = [
   "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
   "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
@@ -15,23 +17,6 @@ const MESES = [
 
 function anioActual() {
   return new Date().getFullYear();
-}
-
-function hoyISO() {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function fechaLegible(iso) {
-  const [a, m, d] = iso.split("-").map(Number);
-  return new Date(a, m - 1, d).toLocaleDateString("es-AR");
-}
-
-function formatearMonto(monto) {
-  return Number(monto).toLocaleString("es-AR", {
-    style: "currency",
-    currency: "ARS",
-    minimumFractionDigits: 2,
-  });
 }
 
 // Una nota de crédito emitida resta en vez de sumar — el signo se aplica
@@ -45,191 +30,22 @@ function sumaFirmada(filas) {
   return filas.reduce((acc, f) => acc + montoFirmado(f), 0);
 }
 
-function CamposFacturaVenta({ form, setForm, clientes, obras, centros }) {
-  const [totalTocado, setTotalTocado] = useState(false);
-
-  function actualizar(campo, valor) {
-    setForm((f) => {
-      const siguiente = { ...f, [campo]: valor };
-      if (
-        (campo === "importe_neto" || campo === "iva" || campo === "otros_impuestos") &&
-        !totalTocado
-      ) {
-        const neto = Number(campo === "importe_neto" ? valor : siguiente.importe_neto) || 0;
-        const iva = Number(campo === "iva" ? valor : siguiente.iva) || 0;
-        const otros =
-          Number(campo === "otros_impuestos" ? valor : siguiente.otros_impuestos) || 0;
-        siguiente.importe_total = String((neto + iva + otros).toFixed(2));
-      }
-      return siguiente;
-    });
-  }
-
-  return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-      <div className="sm:col-span-2">
-        <label className="block text-xs font-medium text-zinc-700">Tipo de documento *</label>
-        <select
-          required
-          value={form.tipo_documento}
-          onChange={(e) => actualizar("tipo_documento", e.target.value)}
-          className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900"
-        >
-          <option value="factura">Factura</option>
-          <option value="nota_credito">Nota de crédito</option>
-        </select>
-      </div>
-      <div>
-        <label className="block text-xs font-medium text-zinc-700">Cliente *</label>
-        <select
-          required
-          value={form.cliente_id}
-          onChange={(e) => actualizar("cliente_id", e.target.value)}
-          className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900"
-        >
-          <option value="">Elegí un cliente...</option>
-          {clientes.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.nombre}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div>
-        <label className="block text-xs font-medium text-zinc-700">Fecha *</label>
-        <input
-          required
-          type="date"
-          value={form.fecha}
-          onChange={(e) => actualizar("fecha", e.target.value)}
-          className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900"
-        />
-      </div>
-      <div>
-        <label className="block text-xs font-medium text-zinc-700">Tipo de factura *</label>
-        <select
-          required
-          value={form.tipo_factura}
-          onChange={(e) => actualizar("tipo_factura", e.target.value)}
-          className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900"
-        >
-          {TIPOS_FACTURA.map((t) => (
-            <option key={t} value={t}>
-              {t === "otro" ? "Otro" : t}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div>
-        <label className="block text-xs font-medium text-zinc-700">N.º de factura *</label>
-        <input
-          required
-          type="text"
-          value={form.numero_factura}
-          onChange={(e) => actualizar("numero_factura", e.target.value)}
-          className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900"
-        />
-      </div>
-      <div>
-        <label className="block text-xs font-medium text-zinc-700">Importe neto *</label>
-        <input
-          required
-          type="number"
-          min="0"
-          step="any"
-          value={form.importe_neto}
-          onChange={(e) => actualizar("importe_neto", e.target.value)}
-          className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900"
-        />
-      </div>
-      <div>
-        <label className="block text-xs font-medium text-zinc-700">IVA *</label>
-        <input
-          required
-          type="number"
-          min="0"
-          step="any"
-          value={form.iva}
-          onChange={(e) => actualizar("iva", e.target.value)}
-          className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900"
-        />
-      </div>
-      <div>
-        <label className="block text-xs font-medium text-zinc-700">Otros impuestos *</label>
-        <input
-          required
-          type="number"
-          min="0"
-          step="any"
-          value={form.otros_impuestos}
-          onChange={(e) => actualizar("otros_impuestos", e.target.value)}
-          className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900"
-        />
-      </div>
-      <div>
-        <label className="block text-xs font-medium text-zinc-700">
-          Importe total *{" "}
-          {!totalTocado && <span className="text-zinc-400">(neto + IVA + otros impuestos)</span>}
-        </label>
-        <input
-          required
-          type="number"
-          min="0"
-          step="any"
-          value={form.importe_total}
-          onChange={(e) => {
-            setTotalTocado(true);
-            actualizar("importe_total", e.target.value);
-          }}
-          className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900"
-        />
-      </div>
-      <div>
-        <label className="block text-xs font-medium text-zinc-700">Estado de cobro *</label>
-        <select
-          required
-          value={form.estado_cobro}
-          onChange={(e) => actualizar("estado_cobro", e.target.value)}
-          className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900"
-        >
-          <option value="pendiente">Pendiente</option>
-          <option value="cobrada">Cobrada</option>
-        </select>
-      </div>
-      <div>
-        <label className="block text-xs font-medium text-zinc-700">Obra (opcional)</label>
-        <select
-          value={form.obra_id}
-          onChange={(e) => actualizar("obra_id", e.target.value)}
-          className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900"
-        >
-          <option value="">Sin vincular</option>
-          {obras.map((o) => (
-            <option key={o.id} value={o.id}>
-              {o.direccion}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div className="sm:col-span-2">
-        <label className="block text-xs font-medium text-zinc-700">
-          Centro de costos (opcional)
-        </label>
-        <select
-          value={form.centro_costo_id}
-          onChange={(e) => actualizar("centro_costo_id", e.target.value)}
-          className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900"
-        >
-          <option value="">Sin imputar</option>
-          {centros.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.nombre}
-            </option>
-          ))}
-        </select>
-      </div>
-    </div>
-  );
+// OR a mano para el buscador: PostgREST no permite filtrar por columnas de
+// una tabla relacionada (cliente.nombre/cuit) dentro de un .or() salvo que
+// esté embebida en el select, así que se resuelve del lado del cliente con
+// la lista de clientes que ya está en memoria.
+function condicionBusqueda(termino, clientes) {
+  const limpio = termino.replace(/[,()]/g, "").trim();
+  if (!limpio) return null;
+  const buscado = limpio.toLowerCase();
+  const idsCliente = clientes
+    .filter(
+      (c) => c.nombre.toLowerCase().includes(buscado) || (c.cuit ?? "").includes(limpio)
+    )
+    .map((c) => c.id);
+  const condiciones = [`numero_factura.ilike.%${limpio}%`];
+  if (idsCliente.length > 0) condiciones.push(`cliente_id.in.(${idsCliente.join(",")})`);
+  return condiciones.join(",");
 }
 
 function FacturaVenta({ factura, clientes, obras, centros, url, onCambio }) {
@@ -451,21 +267,6 @@ function FacturaVenta({ factura, clientes, obras, centros, url, onCambio }) {
   );
 }
 
-const FORM_INICIAL = {
-  tipo_documento: "factura",
-  cliente_id: "",
-  tipo_factura: "A",
-  numero_factura: "",
-  fecha: hoyISO(),
-  importe_neto: "",
-  iva: "",
-  otros_impuestos: "0",
-  importe_total: "",
-  estado_cobro: "pendiente",
-  obra_id: "",
-  centro_costo_id: "",
-};
-
 // Facturación de un año: por mes y por cliente. Se recalcula al vuelo con
 // una consulta liviana (solo las columnas que hacen falta) cada vez que
 // cambia el año elegido — no se guarda nada de esto en la base, mismo
@@ -519,9 +320,9 @@ function ResumenFacturacion({ clientes }) {
   const totalAnio = porMes.reduce((a, b) => a + b, 0);
 
   return (
-    <div className="mt-6 rounded-lg border border-zinc-200 bg-white p-5">
+    <>
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-lg font-semibold text-primary">Facturación por mes y por cliente</h2>
+        <label className="text-sm text-zinc-600">Año</label>
         <input
           type="number"
           value={anio}
@@ -568,15 +369,13 @@ function ResumenFacturacion({ clientes }) {
           </div>
         </>
       )}
-    </div>
+    </>
   );
 }
 
 export default function FacturasVenta() {
   const role = useRole();
   const puedeGestionar = role === "administrador" || role === "administracion";
-
-  const inputComprobanteRef = useRef(null);
 
   const [clientes, setClientes] = useState([]);
   const [obras, setObras] = useState([]);
@@ -587,6 +386,15 @@ export default function FacturasVenta() {
   const [filtroTipoDocumento, setFiltroTipoDocumento] = useState("");
   const [filtroDesde, setFiltroDesde] = useState("");
   const [filtroHasta, setFiltroHasta] = useState("");
+  const [busqueda, setBusqueda] = useState("");
+  const [filtroBusqueda, setFiltroBusqueda] = useState("");
+
+  // Debounce: la búsqueda dispara la consulta 250ms después de que el
+  // usuario deja de tipear, para no pegarle a la base en cada tecla.
+  useEffect(() => {
+    const id = setTimeout(() => setFiltroBusqueda(busqueda.trim()), 250);
+    return () => clearTimeout(id);
+  }, [busqueda]);
 
   const [facturas, setFacturas] = useState([]);
   const [urls, setUrls] = useState({});
@@ -599,14 +407,8 @@ export default function FacturasVenta() {
   const [totalPendiente, setTotalPendiente] = useState(0);
   const [totalCobrado, setTotalCobrado] = useState(0);
 
-  const [mostrarNuevo, setMostrarNuevo] = useState(false);
-  const [nuevo, setNuevo] = useState(FORM_INICIAL);
-  const [comprobante, setComprobante] = useState(null);
-  const [guardando, setGuardando] = useState(false);
-  const [errorGuardado, setErrorGuardado] = useState(null);
-
   const cargarClientes = useCallback(async () => {
-    const { data } = await supabase.from("clientes").select("id, nombre").order("nombre");
+    const { data } = await supabase.from("clientes").select("id, nombre, cuit").order("nombre");
     setClientes(data ?? []);
   }, []);
 
@@ -628,18 +430,25 @@ export default function FacturasVenta() {
   const cargarFacturas = useCallback(async () => {
     setCargando(true);
 
+    // Con búsqueda activa se levanta el límite de paginación: el resultado
+    // ya viene acotado por el texto tipeado, no tiene sentido esconderlo
+    // detrás de "Ver facturas más viejas".
+    const limiteEfectivo = filtroBusqueda ? 500 : limite;
+
     let query = supabase
       .from("facturas_venta")
       .select("*")
       .order("fecha", { ascending: false })
       .order("created_at", { ascending: false })
-      .limit(limite + 1);
+      .limit(limiteEfectivo + 1);
 
     if (filtroCliente) query = query.eq("cliente_id", filtroCliente);
     if (filtroEstado) query = query.eq("estado_cobro", filtroEstado);
     if (filtroTipoDocumento) query = query.eq("tipo_documento", filtroTipoDocumento);
     if (filtroDesde) query = query.gte("fecha", filtroDesde);
     if (filtroHasta) query = query.lte("fecha", filtroHasta);
+    const condicion = condicionBusqueda(filtroBusqueda, clientes);
+    if (condicion) query = query.or(condicion);
 
     const { data, error } = await query;
 
@@ -650,8 +459,8 @@ export default function FacturasVenta() {
     }
 
     setError(null);
-    setHayMas(data.length > limite);
-    const visibles = data.slice(0, limite);
+    setHayMas(data.length > limiteEfectivo);
+    const visibles = data.slice(0, limiteEfectivo);
     setFacturas(visibles);
 
     const rutas = visibles.map((f) => f.comprobante_ruta).filter(Boolean);
@@ -669,7 +478,16 @@ export default function FacturasVenta() {
     }
 
     setCargando(false);
-  }, [limite, filtroCliente, filtroEstado, filtroTipoDocumento, filtroDesde, filtroHasta]);
+  }, [
+    limite,
+    filtroCliente,
+    filtroEstado,
+    filtroTipoDocumento,
+    filtroDesde,
+    filtroHasta,
+    filtroBusqueda,
+    clientes,
+  ]);
 
   // Los totales reflejan cliente y fecha (para que "pendiente" siga
   // teniendo sentido aunque se esté mirando solo "cobradas"), pidiendo
@@ -681,16 +499,18 @@ export default function FacturasVenta() {
     if (filtroCliente) query = query.eq("cliente_id", filtroCliente);
     if (filtroDesde) query = query.gte("fecha", filtroDesde);
     if (filtroHasta) query = query.lte("fecha", filtroHasta);
+    const condicion = condicionBusqueda(filtroBusqueda, clientes);
+    if (condicion) query = query.or(condicion);
 
     const { data } = await query;
     setTotalRegistrado(sumaFirmada(data ?? []));
     setTotalPendiente(sumaFirmada((data ?? []).filter((f) => f.estado_cobro === "pendiente")));
     setTotalCobrado(sumaFirmada((data ?? []).filter((f) => f.estado_cobro === "cobrada")));
-  }, [filtroCliente, filtroDesde, filtroHasta]);
+  }, [filtroCliente, filtroDesde, filtroHasta, filtroBusqueda, clientes]);
 
   useEffect(() => {
     setLimite(PAGINA);
-  }, [filtroCliente, filtroEstado, filtroTipoDocumento, filtroDesde, filtroHasta]);
+  }, [filtroCliente, filtroEstado, filtroTipoDocumento, filtroDesde, filtroHasta, filtroBusqueda]);
 
   useEffect(() => {
     cargarFacturas();
@@ -699,74 +519,6 @@ export default function FacturasVenta() {
   useEffect(() => {
     cargarTotales();
   }, [cargarTotales]);
-
-  async function handleAgregar(e) {
-    e.preventDefault();
-    if (
-      !nuevo.cliente_id ||
-      !nuevo.numero_factura.trim() ||
-      nuevo.importe_neto === "" ||
-      nuevo.iva === "" ||
-      nuevo.otros_impuestos === "" ||
-      nuevo.importe_total === ""
-    ) {
-      return;
-    }
-
-    setGuardando(true);
-    setErrorGuardado(null);
-
-    const facturaId = crypto.randomUUID();
-    let comprobanteRuta = null;
-
-    if (comprobante) {
-      comprobanteRuta = `${facturaId}/${crypto.randomUUID()}-${comprobante.name}`;
-      const { error: errSubida } = await supabase.storage
-        .from(BUCKET)
-        .upload(comprobanteRuta, comprobante);
-
-      if (errSubida) {
-        setErrorGuardado(`No se pudo subir el comprobante: ${errSubida.message}`);
-        setGuardando(false);
-        return;
-      }
-    }
-
-    const { error } = await supabase.from("facturas_venta").insert({
-      id: facturaId,
-      tipo_documento: nuevo.tipo_documento,
-      cliente_id: nuevo.cliente_id,
-      tipo_factura: nuevo.tipo_factura,
-      numero_factura: nuevo.numero_factura.trim(),
-      fecha: nuevo.fecha,
-      importe_neto: Number(nuevo.importe_neto),
-      iva: Number(nuevo.iva),
-      otros_impuestos: Number(nuevo.otros_impuestos),
-      importe_total: Number(nuevo.importe_total),
-      estado_cobro: nuevo.estado_cobro,
-      obra_id: nuevo.obra_id || null,
-      centro_costo_id: nuevo.centro_costo_id || null,
-      comprobante_ruta: comprobanteRuta,
-    });
-
-    if (error) {
-      if (comprobanteRuta) await supabase.storage.from(BUCKET).remove([comprobanteRuta]);
-      setErrorGuardado(
-        error.code === "23505"
-          ? "Ya existe un documento cargado con ese cliente, tipo de documento, tipo y número."
-          : error.message
-      );
-      setGuardando(false);
-      return;
-    }
-
-    setNuevo(FORM_INICIAL);
-    setComprobante(null);
-    if (inputComprobanteRef.current) inputComprobanteRef.current.value = "";
-    setGuardando(false);
-    setMostrarNuevo(false);
-    await Promise.all([cargarFacturas(), cargarTotales()]);
-  }
 
   async function recargarTodo() {
     await Promise.all([cargarFacturas(), cargarTotales()]);
@@ -778,7 +530,7 @@ export default function FacturasVenta() {
 
   if (!puedeGestionar) {
     return (
-      <div className="min-h-screen bg-zinc-50 p-8 font-sans">
+      <div className="min-h-screen bg-zinc-50 p-4 font-sans sm:p-8">
         <div className="mx-auto max-w-3xl">
           <p className="text-zinc-600">No tenés acceso a esta pantalla.</p>
         </div>
@@ -787,7 +539,7 @@ export default function FacturasVenta() {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-50 p-8 font-sans">
+    <div className="min-h-screen bg-zinc-50 p-4 font-sans sm:p-8">
       <div className="mx-auto max-w-4xl">
         <h1 className="text-2xl font-semibold text-primary">Facturas de venta</h1>
         <p className="mt-1 text-sm text-zinc-500">
@@ -819,77 +571,25 @@ export default function FacturasVenta() {
           Estos tres valores se ajustan solos con los filtros de abajo (cliente y fechas).
         </p>
 
-        {!mostrarNuevo && (
-          <div className="mt-6 flex justify-end">
-            <button
-              type="button"
-              onClick={() => setMostrarNuevo(true)}
-              className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90"
-            >
-              + Cargar factura o nota de crédito
-            </button>
-          </div>
-        )}
-
-        {mostrarNuevo && (
-          <form
-            onSubmit={handleAgregar}
-            className="mt-6 rounded-lg border border-zinc-200 bg-white p-5"
+        <div className="mt-4 flex justify-end sm:mt-6">
+          <Link
+            href="/facturas-venta/nueva"
+            className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90"
           >
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-primary">Nuevo documento</h2>
-              <button
-                type="button"
-                onClick={() => setMostrarNuevo(false)}
-                className="text-sm text-zinc-500 hover:text-zinc-800"
-              >
-                Cancelar
-              </button>
-            </div>
-
-            <div className="mt-4">
-              <CamposFacturaVenta
-                form={nuevo}
-                setForm={setNuevo}
-                clientes={clientes}
-                obras={obras}
-                centros={centros}
-              />
-
-              <div className="mt-3">
-                <label className="block text-xs font-medium text-zinc-700">
-                  Comprobante (foto o PDF, opcional)
-                </label>
-                <input
-                  ref={inputComprobanteRef}
-                  type="file"
-                  accept=".pdf,image/png,image/jpeg,image/webp,image/heic"
-                  onChange={(e) => setComprobante(e.target.files?.[0] ?? null)}
-                  className="mt-1 block w-full text-sm text-zinc-700 file:mr-3 file:rounded-md file:border-0 file:bg-zinc-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-zinc-700"
-                />
-              </div>
-            </div>
-
-            {errorGuardado && (
-              <p className="mt-3 rounded-md bg-accent/10 px-3 py-2 text-sm text-accent">
-                {errorGuardado}
-              </p>
-            )}
-
-            <button
-              type="submit"
-              disabled={guardando}
-              className="mt-4 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90 disabled:opacity-50"
-            >
-              {guardando ? "Guardando..." : "Agregar documento"}
-            </button>
-          </form>
-        )}
+            + Cargar factura o nota de crédito
+          </Link>
+        </div>
 
         <ImportarComprobantesArcaVenta onImportado={handleImportado} />
 
-        <div className="mt-6 rounded-lg border border-zinc-200 bg-white p-5">
-          <h2 className="text-lg font-semibold text-primary">Facturas y notas de crédito</h2>
+        <Seccion titulo="Facturas y notas de crédito" defaultAbierto>
+          <input
+            type="text"
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)}
+            placeholder="Buscar por cliente, CUIT o N.º de factura..."
+            className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
+          />
 
           <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-4">
             <select
@@ -972,9 +672,11 @@ export default function FacturasVenta() {
               Ver facturas más viejas
             </button>
           )}
-        </div>
+        </Seccion>
 
-        <ResumenFacturacion clientes={clientes} />
+        <Seccion titulo="Facturación por mes y por cliente">
+          <ResumenFacturacion clientes={clientes} />
+        </Seccion>
       </div>
     </div>
   );

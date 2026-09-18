@@ -21,6 +21,7 @@ const GRUPOS = [
       { href: "/productos", label: "Productos" },
       { href: "/stock", label: "Stock", badge: "bajoMinimo" },
       { href: "/compras", label: "Compras" },
+      { href: "/pedidos-material", label: "Pedidos de material", badge: "pedidosMaterial" },
       { href: "/depositos", label: "Depósitos" },
       {
         href: "/proveedores",
@@ -76,6 +77,7 @@ const GRUPOS = [
       { href: "/centros-costo", label: "Centros de costos" },
       { href: "/ordenes-compra", label: "Órdenes de compra" },
       { href: "/ordenes-pago", label: "Órdenes de pago" },
+      { href: "/conciliacion-bancaria", label: "Conciliación bancaria" },
     ],
   },
   {
@@ -215,6 +217,12 @@ export default function Sidebar({ session, role }) {
     nuevosContadores.bajoMinimo = Object.values(totalesPorProducto).filter(
       (p) => p.total < p.stockMinimo
     ).length;
+
+    const pedidosRes = await supabase
+      .from("pedidos_material")
+      .select("id", { count: "exact", head: true })
+      .eq("estado", "pendiente");
+    nuevosContadores.pedidosMaterial = pedidosRes.count ?? 0;
 
     setContadores(nuevosContadores);
   }, [puedeStock, puedeVerObras]);

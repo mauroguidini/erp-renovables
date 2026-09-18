@@ -33,6 +33,10 @@ export default function DetalleOrdenPago() {
 
   const [orden, setOrden] = useState(null);
   const [detalle, setDetalle] = useState([]);
+  // Una OP por transferencia puede tener MÁS de un movimiento bancario
+  // atrás (varias transferencias agrupadas en un mismo pago) — por eso se
+  // busca por separado con orden_pago_id, no con una relación 1-a-1.
+  const [movimientosBancarios, setMovimientosBancarios] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(null);
 
@@ -44,9 +48,7 @@ export default function DetalleOrdenPago() {
 
     const { data: ordenData, error: errOrden } = await supabase
       .from("ordenes_pago")
-      .select(
-        "*, proveedores(nombre, contacto_telefono, contacto_email, direccion, cuit)"
-      )
+      .select("*, proveedores(nombre, contacto_telefono, contacto_email, direccion, cuit)")
       .eq("id", id)
       .single();
 
@@ -62,9 +64,19 @@ export default function DetalleOrdenPago() {
       .eq("orden_pago_id", id)
       .order("monto", { ascending: false });
 
+    let movimientosData = [];
+    if (ordenData.medio_pago === "transferencia") {
+      const { data } = await supabase
+        .from("movimientos_bancarios")
+        .select("id, fecha, numero_comprobante, bancos(nombre)")
+        .eq("orden_pago_id", id);
+      movimientosData = data ?? [];
+    }
+
     setError(null);
     setOrden(ordenData);
     setDetalle(detalleData ?? []);
+    setMovimientosBancarios(movimientosData);
     setCargando(false);
   }, [id]);
 
@@ -73,15 +85,28 @@ export default function DetalleOrdenPago() {
   }, [cargar]);
 
   async function handleAnular() {
+    const esTransferencia = orden.medio_pago === "transferencia";
+
     const confirmado = window.confirm(
-      "¿Anular esta orden de pago? Se repone el monto a la Caja de efectivo y las facturas incluidas vuelven a quedar pendientes. No se puede deshacer."
+      esTransferencia
+        ? "¿Anular esta orden de pago? La factura incluida vuelve a quedar pendiente y el movimiento bancario vuelve a quedar sin conciliar. No se puede deshacer."
+        : "¿Anular esta orden de pago? Se repone el monto a la Caja de efectivo y las facturas incluidas vuelven a quedar pendientes. No se puede deshacer."
     );
     if (!confirmado) return;
 
     setAnulando(true);
     setErrorAnular(null);
 
-    const { error } = await supabase.rpc("anular_orden_pago", { p_orden_pago_id: id });
+    // Una OP pagada por transferencia no tocó nunca la Caja de efectivo —
+    // anularla tiene que pasar por la función hermana que tampoco la toca,
+    // no por anular_orden_pago (esa SIEMPRE repone a caja). Alcanza con
+    // pasarle CUALQUIER movimiento del grupo: la función repone todos los
+    // que compartan esta misma Orden de pago.
+    const { error } = esTransferencia
+      ? await supabase.rpc("desconciliar_movimiento_bancario", {
+          p_movimiento_id: movimientosBancarios[0]?.id,
+        })
+      : await supabase.rpc("anular_orden_pago", { p_orden_pago_id: id });
 
     if (error) {
       setErrorAnular(error.message);
@@ -164,6 +189,22 @@ export default function DetalleOrdenPago() {
           <div>
             <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">Fecha</p>
             <p className="mt-1 text-sm text-zinc-900">{fechaLegible(orden.fecha)}</p>
+          </div>
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
+              Medio de pago
+            </p>
+            <p className="mt-1 text-sm text-zinc-900">
+              {orden.medio_pago === "transferencia" ? "Transferencia bancaria" : "Caja de efectivo"}
+            </p>
+            {orden.medio_pago === "transferencia" &&
+              movimientosBancarios.map((m) => (
+                <p key={m.id} className="text-xs text-zinc-500">
+                  {m.bancos?.nombre ?? "Banco"}
+                  {m.numero_comprobante && ` · Comprobante ${m.numero_comprobante}`}
+                  {m.fecha && ` · ${fechaLegible(m.fecha)}`}
+                </p>
+              ))}
           </div>
         </div>
 
