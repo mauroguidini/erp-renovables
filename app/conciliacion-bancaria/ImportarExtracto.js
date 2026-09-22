@@ -2,6 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import {
+  normalizarTexto,
+  clasificar,
+  esIngresoCheque,
+  esRechazoCheque,
+  extraerNumeroCheque,
+} from "./clasificacionMovimientos";
 
 // Columnas que nos interesan del extracto bancario, buscadas por palabra
 // clave (no por texto exacto) porque no tenemos un archivo real de
@@ -16,14 +23,6 @@ const PALABRAS_CLAVE = {
   credito: "credito",
   saldo: "saldo",
 };
-
-function normalizarTexto(texto) {
-  return String(texto ?? "")
-    .normalize("NFD")
-    .replace(/\p{Diacritic}/gu, "")
-    .toLowerCase()
-    .trim();
-}
 
 function detectarColumna(encabezadoNorm) {
   if (encabezadoNorm.includes(PALABRAS_CLAVE.fecha)) return "fecha";
@@ -122,27 +121,83 @@ function extraerCuit(texto) {
   return null;
 }
 
-// Clasificación automática de lo obvio — en este orden: impuestos primero
-// (incluye Ley 25.413, IVA, Sellos, SIRCREB, percepciones), comisiones
-// bancarias después, y organismos (AFIP/ARCA — el ex-AFIP se renombró —
-// otros entes recaudadores) SIEMPRE como impuestos aunque el concepto
-// tenga un CUIT reconocible, para no intentar "conciliar" un pago a AFIP
-// contra una factura de compra que no existe.
-function clasificar(conceptoNorm) {
-  if (/\b25\.?413\b|ley 25413|\biva\b|\bsellos?\b|sircreb|percepcion/.test(conceptoNorm)) {
-    return "impuestos";
-  }
-  if (/comision|mantenimiento de cuenta/.test(conceptoNorm)) {
-    return "gastos_bancarios";
-  }
-  if (/\bafip\b|\barca\b|\barba\b|rentas/.test(conceptoNorm)) {
-    return "impuestos";
-  }
-  return null;
-}
-
 function claveDuplicado(bancoId, fecha, numeroComprobante, debito, credito, saldo) {
   return `${bancoId}|${fecha}|${numeroComprobante ?? ""}|${debito}|${credito}|${saldo ?? ""}`;
+}
+
+// Empareja eCheques por número de cheque — NUNCA por monto, porque puede
+// haber varios cheques por el mismo importe. Revisa dos fuentes para la
+// contrapartida: otras filas de este mismo archivo (por si el ingreso y
+// el rechazo vienen juntos) y movimientos ya importados antes (por si
+// quedaron en archivos distintos — lo más común, porque un cheque suele
+// rebotar semanas después de haber entrado). Si no encuentra pareja en
+// ninguna de las dos, la fila queda como estaba (sin emparejar, para
+// revisar a mano) — nunca se fuerza un match.
+async function emparejarCheques(validas, bancoId) {
+  const conNumero = validas.filter((v) => v.numero_cheque);
+  if (conNumero.length === 0) return [];
+
+  const { data: existentesSinPareja } = await supabase
+    .from("movimientos_bancarios")
+    .select("id, numero_cheque, debito, credito")
+    .eq("banco_id", bancoId)
+    .is("cheque_pareja_id", null)
+    .not("numero_cheque", "is", null);
+
+  const actualizacionesDb = [];
+
+  for (const fila of conNumero) {
+    if (fila.cheque_pareja_id) continue; // ya se emparejó con otra fila de este archivo
+
+    const esIngreso = fila.credito > 0;
+
+    // 1) ¿Hay otra fila del mismo archivo, del tipo opuesto, con el mismo
+    //    número de cheque, todavía sin pareja?
+    const parejaEnArchivo = conNumero.find(
+      (otra) =>
+        otra !== fila &&
+        !otra.cheque_pareja_id &&
+        otra.numero_cheque === fila.numero_cheque &&
+        (otra.credito > 0) !== esIngreso
+    );
+    if (parejaEnArchivo) {
+      fila.cheque_pareja_id = parejaEnArchivo.id;
+      parejaEnArchivo.cheque_pareja_id = fila.id;
+      if (!esIngreso) {
+        fila.estado = "clasificado";
+        fila.clasificacion = "cheque_rechazado";
+      } else {
+        parejaEnArchivo.estado = "clasificado";
+        parejaEnArchivo.clasificacion = "cheque_rechazado";
+      }
+      continue;
+    }
+
+    // 2) ¿Hay un movimiento ya importado antes, del tipo opuesto, con el
+    //    mismo número de cheque, todavía sin pareja?
+    const parejaExistente = (existentesSinPareja ?? []).find(
+      (otra) => otra.numero_cheque === fila.numero_cheque && (otra.credito > 0) !== esIngreso
+    );
+    if (parejaExistente) {
+      fila.cheque_pareja_id = parejaExistente.id;
+      if (!esIngreso) {
+        fila.estado = "clasificado";
+        fila.clasificacion = "cheque_rechazado";
+      }
+      actualizacionesDb.push({
+        id: parejaExistente.id,
+        cheque_pareja_id: fila.id,
+        // Si el que ya estaba importado es el rechazo (débito) y recién
+        // ahora aparece su ingreso, es a él a quien hay que marcarle la
+        // clasificación — el ingreso (crédito) no la necesita.
+        ...(parejaExistente.debito > 0
+          ? { estado: "clasificado", clasificacion: "cheque_rechazado" }
+          : {}),
+      });
+    }
+  }
+
+  return actualizacionesDb;
 }
 
 async function validarFilas(filas, bancoId) {
@@ -204,9 +259,24 @@ async function validarFilas(filas, bancoId) {
 
     let clasificacion = null;
     let cuitDetectado = null;
+    let numeroCheque = null;
     let estado = "no_aplica";
 
-    if (esDebito) {
+    // "Comisión por cheque rechazado" contiene "cheque" y "rechazado" pero
+    // es un gasto bancario (lo agarra clasificar() más abajo, vía
+    // "comision"), no el cheque en sí — hay que descartarlo antes de
+    // entrar a la rama de cheques.
+    const esComision = /comision/.test(conceptoNorm);
+
+    if (!esComision && (esIngresoCheque(conceptoNorm) || esRechazoCheque(conceptoNorm))) {
+      // El número (si el extracto lo trae) se resuelve en emparejarCheques
+      // más abajo; si no lo trae, queda pendiente para emparejar por
+      // monto+fecha desde la pantalla principal. En ningún caso pasa por
+      // clasificar() ni por extraerCuit(): un cheque no es un pago directo
+      // a un proveedor.
+      numeroCheque = extraerNumeroCheque(concepto);
+      estado = esDebito ? "pendiente" : "no_aplica";
+    } else if (esDebito) {
       clasificacion = clasificar(conceptoNorm);
       if (clasificacion) {
         estado = "clasificado";
@@ -217,6 +287,7 @@ async function validarFilas(filas, bancoId) {
     }
 
     validas.push({
+      id: crypto.randomUUID(),
       banco_id: bancoId,
       fecha,
       concepto,
@@ -225,12 +296,16 @@ async function validarFilas(filas, bancoId) {
       credito,
       saldo,
       cuit_detectado: cuitDetectado,
+      numero_cheque: numeroCheque,
+      cheque_pareja_id: null,
       clasificacion,
       estado,
     });
   });
 
-  return { validas, errores, duplicados };
+  const actualizacionesDb = await emparejarCheques(validas, bancoId);
+
+  return { validas, errores, duplicados, actualizacionesDb };
 }
 
 export default function ImportarExtracto({ bancos, onImportado }) {
@@ -297,12 +372,25 @@ export default function ImportarExtracto({ bancos, onImportado }) {
       return;
     }
 
+    // Movimientos ya importados antes (de un archivo previo) cuya pareja de
+    // cheque recién apareció ahora — hay que marcarlos a ellos también.
+    for (const actualizacion of resultado.actualizacionesDb ?? []) {
+      const { id, ...cambios } = actualizacion;
+      await supabase.from("movimientos_bancarios").update(cambios).eq("id", id);
+    }
+
     const clasificados = resultado.validas.filter((f) => f.estado === "clasificado").length;
     const pendientes = resultado.validas.filter((f) => f.estado === "pendiente").length;
+    const chequesEmparejados =
+      resultado.validas.filter((f) => f.cheque_pareja_id).length +
+      (resultado.actualizacionesDb?.length ?? 0);
 
     setExito(
       `Se importaron ${resultado.validas.length} movimientos. ` +
         `${clasificados} se clasificaron solos, ${pendientes} quedaron pendientes de revisar. ` +
+        (chequesEmparejados > 0
+          ? `Se emparejaron ${chequesEmparejados} movimientos de cheques (ingreso + rechazo). `
+          : "") +
         `Se saltearon ${resultado.duplicados.length} por estar duplicados.`
     );
     setResultado(null);

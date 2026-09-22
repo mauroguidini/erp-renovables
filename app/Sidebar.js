@@ -64,6 +64,11 @@ const GRUPOS = [
         label: "Tipos de tarea",
         roles: ["administrador", "jefe_obra"],
       },
+      {
+        href: "/movimientos-material",
+        label: "Materiales y herramientas",
+        roles: ["administrador", "compras", "administracion", "capataz", "jefe_obra"],
+      },
     ],
   },
   {
@@ -77,6 +82,7 @@ const GRUPOS = [
       { href: "/centros-costo", label: "Centros de costos" },
       { href: "/ordenes-compra", label: "Órdenes de compra" },
       { href: "/ordenes-pago", label: "Órdenes de pago" },
+      { href: "/cheques", label: "Cheques emitidos" },
       { href: "/conciliacion-bancaria", label: "Conciliación bancaria" },
     ],
   },

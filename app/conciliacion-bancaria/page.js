@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { useRole } from "../RoleContext";
 import Seccion from "../Seccion";
 import ImportarExtracto from "./ImportarExtracto";
+import { normalizarTexto, esIngresoCheque, esRechazoCheque } from "./clasificacionMovimientos";
 
 function fechaLegible(iso) {
   const [a, m, d] = iso.split("-").map(Number);
@@ -21,6 +22,18 @@ function formatearMonto(monto) {
 
 function normalizarCuit(valor) {
   return String(valor ?? "").replace(/\D/g, "");
+}
+
+// "2026-09-15" -> "septiembre 2026". Solo se usa para agrupar, nunca se
+// guarda — el mes "real" para agrupar siempre sale de partir fecha (texto
+// "YYYY-MM"), no de este formateo.
+function formatearMes(mesIso) {
+  const [a, m] = mesIso.split("-").map(Number);
+  const texto = new Date(a, m - 1, 1).toLocaleDateString("es-AR", {
+    month: "long",
+    year: "numeric",
+  });
+  return texto.charAt(0).toUpperCase() + texto.slice(1);
 }
 
 // Buscador simple del lado del cliente (ya está todo cargado en memoria,
@@ -49,6 +62,8 @@ function coincideBusqueda(movimiento, termino, proveedores) {
 const ETIQUETA_CLASIFICACION = {
   impuestos: "Gasto impuestos",
   gastos_bancarios: "Gastos bancarios",
+  sueldos: "Sueldos",
+  cheque_rechazado: "Cheque rechazado (emparejado)",
 };
 
 function MovimientoInfo({ movimiento }) {
@@ -481,6 +496,157 @@ function FilaPendiente({
   );
 }
 
+// El extracto de este banco no trae ningún número de cheque, así que acá
+// se sugieren candidatos por monto EXACTO (no "parecido") + fecha de
+// ingreso anterior o igual a la del rechazo — pero nunca se empareja
+// solo: el usuario tiene que confirmar cada pareja a mano, una por una.
+function FilaRechazoCheque({ movimiento, candidatos, onConfirmar }) {
+  const [confirmandoId, setConfirmandoId] = useState(null);
+  const [error, setError] = useState(null);
+
+  async function handleConfirmar(ingresoId) {
+    setConfirmandoId(ingresoId);
+    setError(null);
+    const err = await onConfirmar(ingresoId, movimiento.id);
+    setConfirmandoId(null);
+    if (err) setError(err);
+  }
+
+  return (
+    <div className="py-3">
+      <MovimientoInfo movimiento={movimiento} />
+      {error && <p className="mt-1 text-xs text-accent">{error}</p>}
+
+      {candidatos.length === 0 && (
+        <p className="mt-2 text-xs text-zinc-500">
+          No se encontró ningún ingreso por el mismo monto exacto — revisalo a mano en el extracto.
+        </p>
+      )}
+
+      {candidatos.length > 0 && (
+        <div className="mt-2 space-y-1.5">
+          {candidatos.map((c) => (
+            <div
+              key={c.id}
+              className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-zinc-200 bg-zinc-50 px-2.5 py-1.5"
+            >
+              <span className="text-xs text-zinc-600">
+                Ingreso del {fechaLegible(c.fecha)} · {formatearMonto(c.credito)} · {c.concepto}
+              </span>
+              <button
+                type="button"
+                onClick={() => handleConfirmar(c.id)}
+                disabled={confirmandoId !== null}
+                className="rounded-md bg-primary px-3 py-1 text-xs font-medium text-white hover:bg-primary/90 disabled:opacity-50"
+              >
+                {confirmandoId === c.id ? "Confirmando..." : "Confirmar pareja"}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Mismo criterio que "Por categoría" en Centro de costo: se agrupa en un
+// solo paso en JS sobre lo que ya está cargado en memoria, sin pedirle un
+// group by a la base. Acá se agrupa dos niveles: tipo de gasto (Impuestos,
+// Gastos bancarios, Sueldos, Cheque rechazado) y, adentro, por mes.
+function ResumenGastosClasificados({ movimientos }) {
+  const porTipo = {};
+  for (const m of movimientos) {
+    const tipo = m.clasificacion ?? "otro";
+    const mes = m.fecha.slice(0, 7);
+    porTipo[tipo] ??= { total: 0, porMes: {} };
+    porTipo[tipo].total += Number(m.debito);
+    porTipo[tipo].porMes[mes] = (porTipo[tipo].porMes[mes] ?? 0) + Number(m.debito);
+  }
+
+  const tipos = Object.entries(porTipo).sort((a, b) => b[1].total - a[1].total);
+
+  if (tipos.length === 0) {
+    return <p className="text-sm text-zinc-600">Todavía no hay movimientos clasificados.</p>;
+  }
+
+  return (
+    <div className="space-y-4">
+      {tipos.map(([tipo, info]) => {
+        const meses = Object.entries(info.porMes).sort((a, b) => (a[0] < b[0] ? 1 : -1));
+        return (
+          <div key={tipo}>
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-medium text-zinc-700">
+                {ETIQUETA_CLASIFICACION[tipo] ?? tipo}
+              </h3>
+              <span className="text-sm font-semibold text-zinc-900">
+                {formatearMonto(info.total)}
+              </span>
+            </div>
+            <div className="mt-1 divide-y divide-zinc-100 border-t border-zinc-100 pl-3">
+              {meses.map(([mes, total]) => (
+                <div key={mes} className="flex items-center justify-between py-1.5 text-sm">
+                  <span className="text-zinc-600">{formatearMes(mes)}</span>
+                  <span className="text-zinc-700">{formatearMonto(total)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function FilaClasificada({ movimiento, onCambio }) {
+  const [deshaciendo, setDeshaciendo] = useState(false);
+  const [error, setError] = useState(null);
+
+  async function handleDeshacer() {
+    const confirmado = window.confirm(
+      "¿Deshacer este emparejamiento de cheque? Los dos movimientos vuelven a quedar sin resolver."
+    );
+    if (!confirmado) return;
+
+    setDeshaciendo(true);
+    setError(null);
+    const { error } = await supabase.rpc("deshacer_pareja_cheque", {
+      p_movimiento_id: movimiento.id,
+    });
+    if (error) {
+      setError(error.message);
+      setDeshaciendo(false);
+      return;
+    }
+    setDeshaciendo(false);
+    await onCambio();
+  }
+
+  return (
+    <div className="flex flex-wrap items-start justify-between gap-2 py-3">
+      <div>
+        <MovimientoInfo movimiento={movimiento} />
+        {error && <p className="mt-1 text-xs text-accent">{error}</p>}
+      </div>
+      <div className="flex items-center gap-2">
+        <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-700">
+          {ETIQUETA_CLASIFICACION[movimiento.clasificacion] ?? movimiento.clasificacion}
+        </span>
+        {movimiento.clasificacion === "cheque_rechazado" && (
+          <button
+            type="button"
+            onClick={handleDeshacer}
+            disabled={deshaciendo}
+            className="text-xs font-medium text-accent hover:underline disabled:opacity-50"
+          >
+            {deshaciendo ? "Deshaciendo..." : "Deshacer"}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function FilaConciliado({ movimiento, onCambio }) {
   const [deshaciendo, setDeshaciendo] = useState(false);
   const [error, setError] = useState(null);
@@ -534,6 +700,10 @@ export default function ConciliacionBancaria() {
   const [bancos, setBancos] = useState([]);
   const [proveedores, setProveedores] = useState([]);
   const [movimientos, setMovimientos] = useState([]);
+  // Ingresos (créditos) candidatos a pareja de un cheque rechazado. Van
+  // aparte porque quedan con estado "no_aplica" (como cualquier crédito) y
+  // la consulta principal de abajo los excluye a propósito.
+  const [ingresosCheque, setIngresosCheque] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(null);
 
@@ -547,14 +717,25 @@ export default function ConciliacionBancaria() {
 
   const cargarMovimientos = useCallback(async () => {
     setCargando(true);
-    const { data, error } = await supabase
-      .from("movimientos_bancarios")
-      .select("*")
-      .neq("estado", "no_aplica")
-      .order("fecha", { ascending: false });
+    const [{ data, error }, { data: ingresos }] = await Promise.all([
+      supabase
+        .from("movimientos_bancarios")
+        .select("*")
+        .neq("estado", "no_aplica")
+        .order("fecha", { ascending: false }),
+      supabase
+        .from("movimientos_bancarios")
+        .select("*")
+        .gt("credito", 0)
+        .is("cheque_pareja_id", null)
+        .order("fecha", { ascending: false }),
+    ]);
     if (error) setError(error.message);
     else setError(null);
     setMovimientos(data ?? []);
+    setIngresosCheque(
+      (ingresos ?? []).filter((m) => esIngresoCheque(normalizarTexto(m.concepto)))
+    );
     setCargando(false);
   }, []);
 
@@ -575,7 +756,12 @@ export default function ConciliacionBancaria() {
 
   // Sin filtrar por búsqueda — el cálculo de candidatos siempre corre
   // sobre TODOS los pendientes, la búsqueda solo recorta qué se muestra.
-  const todosPendientes = movimientos.filter((m) => m.estado === "pendiente");
+  // Los rechazos de cheque quedan afuera: no son un pago a un proveedor,
+  // así que no tiene sentido ofrecerles una factura — se resuelven aparte
+  // en su propia sección, más abajo.
+  const todosPendientes = movimientos.filter(
+    (m) => m.estado === "pendiente" && !esRechazoCheque(normalizarTexto(m.concepto))
+  );
 
   // Candidatos de TODOS los pendientes en un solo lote (una consulta por
   // proveedor involucrado, no una por movimiento) — así se puede armar la
@@ -668,6 +854,16 @@ export default function ConciliacionBancaria() {
     return null;
   }
 
+  async function handleConfirmarParejaCheque(ingresoId, rechazoId) {
+    const { error } = await supabase.rpc("confirmar_pareja_cheque", {
+      p_ingreso_id: ingresoId,
+      p_rechazo_id: rechazoId,
+    });
+    if (error) return error.message;
+    await cargarMovimientos();
+    return null;
+  }
+
   async function handleConciliarUno(movimientoId, facturaId) {
     const err = await conciliar([movimientoId], [facturaId]);
     if (!err) await cargarMovimientos();
@@ -737,6 +933,27 @@ export default function ConciliacionBancaria() {
   const conciliados = movimientos
     .filter((m) => m.estado === "conciliado")
     .filter((m) => coincideBusqueda(m, busqueda, proveedores));
+
+  const rechazosChequePendientes = movimientos
+    .filter(
+      (m) =>
+        m.estado === "pendiente" &&
+        m.debito > 0 &&
+        !m.cheque_pareja_id &&
+        esRechazoCheque(normalizarTexto(m.concepto))
+    )
+    .filter((m) => coincideBusqueda(m, busqueda, proveedores));
+
+  function candidatosIngresoPara(rechazo) {
+    return ingresosCheque
+      .filter(
+        (i) =>
+          i.banco_id === rechazo.banco_id &&
+          Number(i.credito) === Number(rechazo.debito) &&
+          i.fecha <= rechazo.fecha
+      )
+      .sort((a, b) => (a.fecha < b.fecha ? 1 : -1));
+  }
 
   return (
     <div className="min-h-screen bg-zinc-50 p-4 font-sans sm:p-8">
@@ -864,19 +1081,38 @@ export default function ConciliacionBancaria() {
               )}
             </Seccion>
 
-            <Seccion titulo={`Clasificados automáticamente (${clasificados.length})`}>
-              {clasificados.length === 0 && (
-                <p className="text-sm text-zinc-600">Todavía no hay movimientos clasificados.</p>
+            <Seccion
+              titulo={`Cheques rechazados a revisar (${rechazosChequePendientes.length})`}
+              defaultAbierto
+            >
+              <p className="text-xs text-zinc-500">
+                Este banco no informa el número de cheque, así que acá se sugiere por monto exacto
+                + fecha — nunca se empareja solo, confirmá cada pareja a mano.
+              </p>
+              {rechazosChequePendientes.length === 0 && (
+                <p className="mt-2 text-sm text-zinc-600">No hay rechazos de cheque para revisar.</p>
               )}
+              {rechazosChequePendientes.length > 0 && (
+                <div className="mt-2 divide-y divide-zinc-100">
+                  {rechazosChequePendientes.map((m) => (
+                    <FilaRechazoCheque
+                      key={m.id}
+                      movimiento={m}
+                      candidatos={candidatosIngresoPara(m)}
+                      onConfirmar={handleConfirmarParejaCheque}
+                    />
+                  ))}
+                </div>
+              )}
+            </Seccion>
+
+            <Seccion titulo={`Clasificados automáticamente (${clasificados.length})`}>
+              <ResumenGastosClasificados movimientos={clasificados} />
+
               {clasificados.length > 0 && (
-                <div className="divide-y divide-zinc-100">
+                <div className="mt-4 divide-y divide-zinc-100 border-t border-zinc-200 pt-2">
                   {clasificados.map((m) => (
-                    <div key={m.id} className="flex flex-wrap items-start justify-between gap-2 py-3">
-                      <MovimientoInfo movimiento={m} />
-                      <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-700">
-                        {ETIQUETA_CLASIFICACION[m.clasificacion] ?? m.clasificacion}
-                      </span>
-                    </div>
+                    <FilaClasificada key={m.id} movimiento={m} onCambio={cargarMovimientos} />
                   ))}
                 </div>
               )}

@@ -15,6 +15,7 @@ import ResumenOt from "./ResumenOt";
 import ParteAsistencia from "./ParteAsistencia";
 import TrabajoDiario from "./TrabajoDiario";
 import GastosObra from "./GastosObra";
+import MaterialHerramientas from "./MaterialHerramientas";
 
 const ESTADOS = [
   "presupuestada",
@@ -472,6 +473,10 @@ function DetalleObraCompleto({ id, role }) {
 
         <Seccion titulo="Rendiciones">
           <GastosObra obraId={id} obraNombre={obra.direccion} />
+        </Seccion>
+
+        <Seccion titulo="Ingresos y salidas de material y herramientas">
+          <MaterialHerramientas obraId={id} />
         </Seccion>
 
         <Seccion titulo="Órdenes de trabajo">
