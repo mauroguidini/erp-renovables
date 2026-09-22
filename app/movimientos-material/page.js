@@ -254,11 +254,33 @@ export default function MovimientosMaterial() {
       <div className="mx-auto max-w-4xl">
         <h1 className="text-2xl font-semibold text-primary">Materiales y herramientas</h1>
         <p className="mt-1 text-sm text-zinc-500">
-          Ingresos y salidas de todas las obras, uno por ítem. Para cargar un movimiento nuevo,
-          entrá a la obra correspondiente.
+          Para cargar un ingreso o salida, entrá a la obra correspondiente.
         </p>
 
-        <div className="mt-4 rounded-lg border border-zinc-200 bg-white p-5 sm:mt-6">
+        <Seccion titulo={`Obras (${obras.length})`} defaultAbierto>
+          {obras.length === 0 && (
+            <p className="text-sm text-zinc-500">No hay obras para mostrar.</p>
+          )}
+          {obras.length > 0 && (
+            <ul className="divide-y divide-zinc-100 rounded-md border border-zinc-200">
+              {obras.map((o) => (
+                <li key={o.id}>
+                  <Link
+                    href={
+                      role === "compras" ? `/obras/${o.id}/movimientos-material` : `/obras/${o.id}`
+                    }
+                    className="block px-3 py-2 text-sm text-primary hover:bg-zinc-50 hover:underline"
+                  >
+                    {o.direccion}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Seccion>
+
+        <Seccion titulo="Historial de movimientos" defaultAbierto>
+        <div className="rounded-lg border border-zinc-200 bg-white p-5">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <select
               value={filtroObra}
@@ -377,6 +399,7 @@ export default function MovimientosMaterial() {
             </div>
           )}
         </div>
+        </Seccion>
 
         <Seccion titulo={`Catálogo de ítems (${catalogo.length})`}>
           <p className="text-sm text-zinc-500">
