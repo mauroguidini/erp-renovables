@@ -180,9 +180,7 @@ export default function MovimientosMaterial() {
 
   useEffect(() => {
     supabase
-      .from("obras_visibles")
-      .select("id, direccion")
-      .order("direccion")
+      .rpc("obras_para_material")
       .then(({ data }) => setObras(data ?? []));
     cargarCatalogo();
   }, [cargarCatalogo]);
@@ -348,7 +346,11 @@ export default function MovimientosMaterial() {
                     <tr key={f.id}>
                       <td className="px-3 py-2 text-primary">
                         <Link
-                          href={`/obras/${f.movimientos_material.obra_id}`}
+                          href={
+                            role === "compras"
+                              ? `/obras/${f.movimientos_material.obra_id}/movimientos-material`
+                              : `/obras/${f.movimientos_material.obra_id}`
+                          }
                           className="hover:underline"
                         >
                           {nombreObra(f.movimientos_material.obra_id)}

@@ -41,11 +41,8 @@ export default function DetalleMovimientoMaterial() {
   const cargar = useCallback(async () => {
     setCargando(true);
 
-    const { data: obraData } = await supabase
-      .from("obras_visibles")
-      .select("direccion")
-      .eq("id", obraId)
-      .maybeSingle();
+    const { data: obrasData } = await supabase.rpc("obras_para_material");
+    const obraData = (obrasData ?? []).find((o) => o.id === obraId) ?? null;
 
     const { data: movData, error: errMov } = await supabase
       .from("movimientos_material")
@@ -106,7 +103,11 @@ export default function DetalleMovimientoMaterial() {
     <div className="min-h-screen bg-zinc-50 p-4 font-sans sm:p-8 print:bg-white print:p-0">
       <div className="mx-auto max-w-3xl">
         <button
-          onClick={() => router.push(`/obras/${obraId}`)}
+          onClick={() =>
+            router.push(
+              role === "compras" ? `/obras/${obraId}/movimientos-material` : `/obras/${obraId}`
+            )
+          }
           className="text-sm text-zinc-500 hover:text-zinc-800 print:hidden"
         >
           ← Volver a la obra
