@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import { useRole } from "../../RoleContext";
 import Seccion from "../../Seccion";
@@ -16,6 +17,7 @@ import ParteAsistencia from "./ParteAsistencia";
 import TrabajoDiario from "./TrabajoDiario";
 import GastosObra from "./GastosObra";
 import MaterialHerramientas from "./MaterialHerramientas";
+import Certificaciones from "./Certificaciones";
 
 const ESTADOS = [
   "presupuestada",
@@ -265,6 +267,17 @@ function DetalleObraCompleto({ id, role }) {
           </div>
         </div>
 
+        {(role === "administrador" || role === "administracion") && (
+          <div className="mt-2 flex justify-end">
+            <Link
+              href={`/obras/${id}/reporte-semanal`}
+              className="text-sm font-medium text-primary hover:underline"
+            >
+              Reporte semanal →
+            </Link>
+          </div>
+        )}
+
         {errorEstado && (
           <p className="mt-2 rounded-md bg-accent/10 px-3 py-2 text-sm text-accent">
             Error al cambiar el estado: {errorEstado}
@@ -480,8 +493,19 @@ function DetalleObraCompleto({ id, role }) {
         </Seccion>
 
         <Seccion titulo="Órdenes de trabajo">
-          <OrdenesTrabajo obraId={id} hitos={hitos} onHitosCambio={cargarHitos} />
+          <OrdenesTrabajo
+            obraId={id}
+            hitos={hitos}
+            onHitosCambio={cargarHitos}
+            obraNombre={obra.direccion}
+          />
         </Seccion>
+
+        {puedeGestionar && (
+          <Seccion titulo="Certificaciones">
+            <Certificaciones obraId={id} hitos={hitos} obraNombre={obra.direccion} />
+          </Seccion>
+        )}
 
         {puedeGestionar && (
           <Seccion titulo="Zona peligrosa" tono="peligro">

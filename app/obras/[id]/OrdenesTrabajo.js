@@ -24,6 +24,78 @@ function esOtVencida(ot) {
   return (ot.estado === "pendiente" || ot.estado === "parcial") && ot.fecha_limite < hoy;
 }
 
+function etiquetaEstado(estado) {
+  return ESTADOS.find((e) => e.value === estado)?.label ??
+    (estado === "reemplazada" ? "Reemplazada" : estado);
+}
+
+function nombreArchivo(obraNombre, sufijo) {
+  // Simplifica el nombre de la obra a algo apto para nombre de archivo:
+  // saca tildes/ñ vía normalize + reemplaza cualquier otro caracter raro.
+  const base = (obraNombre ?? "obra")
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .replace(/[^a-zA-Z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .toLowerCase();
+  return `${sufijo}_${base}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+}
+
+async function descargarExcel({ ots, hitos, obraNombre }) {
+  const XLSX = await import("xlsx");
+
+  const hoy = new Date().toISOString().slice(0, 10);
+
+  const filas = ots.map((ot) => {
+    const hito = hitos.find((h) => h.id === ot.hito_id);
+    const reemplazaA = ot.reemplaza_a_id ? ots.find((o) => o.id === ot.reemplaza_a_id) : null;
+    const reemplazadaPor = ots.find((o) => o.reemplaza_a_id === ot.id) ?? null;
+
+    return {
+      "N°": ot.numero,
+      Descripción: ot.descripcion,
+      Tipo: TIPOS.find((t) => t.value === ot.tipo)?.label ?? ot.tipo,
+      Estado: etiquetaEstado(ot.estado),
+      Vencida: esOtVencida(ot) ? "Sí" : "No",
+      "Fecha inicio": ot.fecha_inicio ? new Date(`${ot.fecha_inicio}T00:00:00`) : "",
+      "Fecha límite": ot.fecha_limite ? new Date(`${ot.fecha_limite}T00:00:00`) : "",
+      Responsable: ot.empleados?.nombre ?? ot.responsable ?? "",
+      Hito: hito?.nombre ?? "",
+      Motivo: MOTIVOS.find((m) => m.value === ot.motivo_incumplimiento)?.label ??
+        ot.motivo_incumplimiento ?? "",
+      "Detalle del motivo": ot.motivo_detalle ?? "",
+      "Reemplaza a OT": reemplazaA ? `#${reemplazaA.numero}` : "",
+      "Reemplazada por OT": reemplazadaPor ? `#${reemplazadaPor.numero}` : "",
+      "Creado por": ot.creado_por ?? "",
+    };
+  });
+
+  const hojaDetalle = XLSX.utils.json_to_sheet(filas, { cellDates: true });
+
+  const contar = (pred) => ots.filter(pred).length;
+  const resumen = [
+    { Estado: "Total OT", Cantidad: ots.length },
+    { Estado: "Pendiente", Cantidad: contar((o) => o.estado === "pendiente") },
+    { Estado: "Iniciada", Cantidad: contar((o) => o.estado === "parcial") },
+    { Estado: "Cumplida", Cantidad: contar((o) => o.estado === "cumplida") },
+    { Estado: "No cumplida", Cantidad: contar((o) => o.estado === "no_cumplida") },
+    { Estado: "Reemplazada", Cantidad: contar((o) => o.estado === "reemplazada") },
+    {
+      Estado: "Vencida",
+      Cantidad: contar(
+        (o) => (o.estado === "pendiente" || o.estado === "parcial") && o.fecha_limite < hoy
+      ),
+    },
+  ];
+  const hojaResumen = XLSX.utils.json_to_sheet(resumen);
+
+  const libro = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(libro, hojaResumen, "Resumen");
+  XLSX.utils.book_append_sheet(libro, hojaDetalle, "Detalle");
+
+  XLSX.writeFile(libro, nombreArchivo(obraNombre, "ordenes_trabajo"));
+}
+
 function EvidenciaOt({ obraId, otId }) {
   const inputRef = useRef(null);
   const ruta = `${obraId}/ot-evidencias/${otId}`;
@@ -534,7 +606,7 @@ function GrupoHito({ hito, ots, ...cardProps }) {
   );
 }
 
-export default function OrdenesTrabajo({ obraId, hitos, onHitosCambio }) {
+export default function OrdenesTrabajo({ obraId, hitos, onHitosCambio, obraNombre }) {
   const role = useRole();
   const esAdmin = role === "administrador";
   const puedeGestionar = role === "administrador" || role === "jefe_obra";
@@ -830,16 +902,24 @@ export default function OrdenesTrabajo({ obraId, hitos, onHitosCambio }) {
 
   return (
     <>
-      {puedeGestionar && (
-        <div className="flex justify-end">
+      <div className="flex flex-wrap items-center justify-end gap-3">
+        {!cargando && !error && ots.length > 0 && (
+          <button
+            onClick={() => descargarExcel({ ots, hitos, obraNombre })}
+            className="text-sm font-medium text-primary hover:underline"
+          >
+            Descargar Excel
+          </button>
+        )}
+        {puedeGestionar && (
           <button
             onClick={() => setMostrarForm((v) => !v)}
             className="text-sm font-medium text-primary hover:underline"
           >
             {mostrarForm ? "Cancelar" : "+ Nueva OT"}
           </button>
-        </div>
-      )}
+        )}
+      </div>
 
       {puedeGestionar && (
         <ImportarPlanTrabajo
