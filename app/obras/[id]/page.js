@@ -18,6 +18,7 @@ import TrabajoDiario from "./TrabajoDiario";
 import GastosObra from "./GastosObra";
 import MaterialHerramientas from "./MaterialHerramientas";
 import Certificaciones from "./Certificaciones";
+import Maquinas from "./Maquinas";
 
 const ESTADOS = [
   "presupuestada",
@@ -504,6 +505,12 @@ function DetalleObraCompleto({ id, role }) {
         {puedeGestionar && (
           <Seccion titulo="Certificaciones">
             <Certificaciones obraId={id} hitos={hitos} obraNombre={obra.direccion} />
+          </Seccion>
+        )}
+
+        {(role === "administrador" || role === "administracion" || role === "jefe_obra") && (
+          <Seccion titulo="Máquinas">
+            <Maquinas obraId={id} />
           </Seccion>
         )}
 

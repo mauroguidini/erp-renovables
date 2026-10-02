@@ -69,6 +69,11 @@ const GRUPOS = [
         label: "Materiales y herramientas",
         roles: ["administrador", "compras", "administracion", "capataz", "jefe_obra"],
       },
+      {
+        href: "/maquinas",
+        label: "Máquinas",
+        roles: ["administrador", "administracion", "jefe_obra"],
+      },
     ],
   },
   {
