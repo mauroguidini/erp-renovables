@@ -24,6 +24,34 @@ function esOtVencida(ot) {
   return (ot.estado === "pendiente" || ot.estado === "parcial") && ot.fecha_limite < hoy;
 }
 
+function aISO(fecha) {
+  return fecha.toISOString().slice(0, 10);
+}
+
+function sumarDias(fecha, dias) {
+  const f = new Date(fecha);
+  f.setDate(f.getDate() + dias);
+  return f;
+}
+
+// Semana de lunes a domingo (no "últimos 7 días" corridos).
+function lunesDeEstaSemana() {
+  const hoy = new Date();
+  const dia = hoy.getDay(); // 0 = domingo
+  const offset = dia === 0 ? -6 : 1 - dia;
+  return sumarDias(hoy, offset);
+}
+
+function rangoSemanaActual() {
+  const lunes = lunesDeEstaSemana();
+  return { desde: aISO(lunes), hasta: aISO(sumarDias(lunes, 6)) };
+}
+
+function rangoSemanaPasada() {
+  const lunes = lunesDeEstaSemana();
+  return { desde: aISO(sumarDias(lunes, -7)), hasta: aISO(sumarDias(lunes, -1)) };
+}
+
 function etiquetaEstado(estado) {
   return ESTADOS.find((e) => e.value === estado)?.label ??
     (estado === "reemplazada" ? "Reemplazada" : estado);
@@ -624,6 +652,10 @@ export default function OrdenesTrabajo({ obraId, hitos, onHitosCambio, obraNombr
   const [guardando, setGuardando] = useState(false);
   const [errorForm, setErrorForm] = useState(null);
 
+  const [filtro, setFiltro] = useState("todas");
+  const [filtroDesde, setFiltroDesde] = useState("");
+  const [filtroHasta, setFiltroHasta] = useState("");
+
   const cargarOts = useCallback(async () => {
     setCargando(true);
     const { data, error } = await supabase
@@ -892,12 +924,25 @@ export default function OrdenesTrabajo({ obraId, hitos, onHitosCambio, obraNombr
     onReemplazar: handleReemplazar,
   };
 
+  const rangoActivo =
+    filtro === "semana_actual"
+      ? rangoSemanaActual()
+      : filtro === "semana_pasada"
+        ? rangoSemanaPasada()
+        : filtro === "personalizado" && filtroDesde && filtroHasta
+          ? { desde: filtroDesde, hasta: filtroHasta }
+          : null;
+
+  const otsVisibles = rangoActivo
+    ? ots.filter((o) => o.fecha_limite >= rangoActivo.desde && o.fecha_limite <= rangoActivo.hasta)
+    : ots;
+
   const grupos =
     hitos.length === 0
       ? null
       : [
-          ...hitos.map((h) => ({ hito: h, ots: ots.filter((o) => o.hito_id === h.id) })),
-          { hito: null, ots: ots.filter((o) => !o.hito_id) },
+          ...hitos.map((h) => ({ hito: h, ots: otsVisibles.filter((o) => o.hito_id === h.id) })),
+          { hito: null, ots: otsVisibles.filter((o) => !o.hito_id) },
         ].filter((g) => g.hito || g.ots.length > 0);
 
   return (
@@ -920,6 +965,58 @@ export default function OrdenesTrabajo({ obraId, hitos, onHitosCambio, obraNombr
           </button>
         )}
       </div>
+
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <span className="text-xs font-medium text-zinc-500">Filtrar por vencimiento:</span>
+        {[
+          { value: "todas", label: "Todas" },
+          { value: "semana_actual", label: "Esta semana" },
+          { value: "semana_pasada", label: "Semana pasada" },
+          { value: "personalizado", label: "Rango personalizado" },
+        ].map((opcion) => (
+          <button
+            key={opcion.value}
+            onClick={() => setFiltro(opcion.value)}
+            className={`rounded-full px-3 py-1 text-xs font-medium ${
+              filtro === opcion.value
+                ? "bg-primary text-white"
+                : "border border-zinc-300 text-zinc-600 hover:bg-zinc-50"
+            }`}
+          >
+            {opcion.label}
+          </button>
+        ))}
+      </div>
+
+      {filtro === "personalizado" && (
+        <div className="mt-2 flex flex-wrap items-end gap-2">
+          <div>
+            <label className="block text-xs font-medium text-zinc-500">Desde</label>
+            <input
+              type="date"
+              value={filtroDesde}
+              onChange={(e) => setFiltroDesde(e.target.value)}
+              className="mt-1 rounded-md border border-zinc-300 bg-white px-2 py-1 text-sm text-zinc-900"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-zinc-500">Hasta</label>
+            <input
+              type="date"
+              value={filtroHasta}
+              onChange={(e) => setFiltroHasta(e.target.value)}
+              className="mt-1 rounded-md border border-zinc-300 bg-white px-2 py-1 text-sm text-zinc-900"
+            />
+          </div>
+        </div>
+      )}
+
+      {rangoActivo && (
+        <p className="mt-1 text-xs text-zinc-400">
+          Mostrando OT con vencimiento entre {rangoActivo.desde} y {rangoActivo.hasta} (
+          {otsVisibles.length} de {ots.length}).
+        </p>
+      )}
 
       {puedeGestionar && (
         <ImportarPlanTrabajo
@@ -1068,9 +1165,15 @@ export default function OrdenesTrabajo({ obraId, hitos, onHitosCambio, obraNombr
         </p>
       )}
 
-      {!cargando && ots.length > 0 && grupos === null && (
+      {!cargando && ots.length > 0 && otsVisibles.length === 0 && (
+        <p className="mt-4 text-sm text-zinc-600">
+          No hay ninguna OT con vencimiento en ese rango.
+        </p>
+      )}
+
+      {!cargando && otsVisibles.length > 0 && grupos === null && (
         <div className="mt-4 space-y-3">
-          {ots.map((ot) => (
+          {otsVisibles.map((ot) => (
             <OtCard key={ot.id} ot={ot} {...cardProps} />
           ))}
         </div>
