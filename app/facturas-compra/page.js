@@ -7,6 +7,7 @@ import { useRole } from "../RoleContext";
 import Seccion from "../Seccion";
 import ImportarComprobantesArca from "./ImportarComprobantesArca";
 import CamposFactura, { fechaLegible, formatearMonto } from "./CamposFactura";
+import UltimoRegistro from "../UltimoRegistro";
 
 const BUCKET = "facturas-compra";
 const PAGINA = 20;
@@ -28,6 +29,12 @@ function montoFirmado(fila) {
 
 function sumaFirmada(filas) {
   return filas.reduce((acc, f) => acc + montoFirmado(f), 0);
+}
+
+function textoUltimaFactura(factura, proveedores) {
+  if (!factura) return "Todavía no cargaste ninguna factura.";
+  const proveedor = proveedores.find((p) => p.id === factura.proveedor_id)?.nombre ?? "—";
+  return `Última factura cargada: ${fechaLegible(factura.fecha)}, ${proveedor} N°${factura.numero_factura}`;
 }
 
 // OR a mano para el buscador: PostgREST no permite filtrar por columnas de
@@ -438,6 +445,29 @@ export default function FacturasCompra() {
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(null);
 
+  // Texto de referencia "última factura cargada" — independiente de los
+  // filtros de la lista de abajo, para que siempre diga la verdad aunque
+  // estés mirando un proveedor o un rango de fechas puntual.
+  const [ultimaFactura, setUltimaFactura] = useState(null);
+  const [cargandoUltima, setCargandoUltima] = useState(true);
+
+  const cargarUltimaFactura = useCallback(async () => {
+    setCargandoUltima(true);
+    const { data } = await supabase
+      .from("facturas_compra")
+      .select("fecha, tipo_factura, numero_factura, proveedor_id")
+      .order("fecha", { ascending: false })
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    setUltimaFactura(data ?? null);
+    setCargandoUltima(false);
+  }, []);
+
+  useEffect(() => {
+    cargarUltimaFactura();
+  }, [cargarUltimaFactura]);
+
   const [totalRegistrado, setTotalRegistrado] = useState(0);
   const [totalPendiente, setTotalPendiente] = useState(0);
   const [totalPagado, setTotalPagado] = useState(0);
@@ -597,7 +627,12 @@ export default function FacturasCompra() {
   }, [cargarOpPorFactura]);
 
   async function recargarTodo() {
-    await Promise.all([cargarFacturas(), cargarTotales(), cargarOpPorFactura()]);
+    await Promise.all([
+      cargarFacturas(),
+      cargarTotales(),
+      cargarOpPorFactura(),
+      cargarUltimaFactura(),
+    ]);
   }
 
   async function handleImportado() {
@@ -650,7 +685,14 @@ export default function FacturasCompra() {
           costos y fechas).
         </p>
 
-        <div className="mt-4 flex justify-end sm:mt-6">
+        <div className="mt-4 sm:mt-6">
+          <UltimoRegistro
+            cargando={cargandoUltima}
+            texto={textoUltimaFactura(ultimaFactura, proveedores)}
+          />
+        </div>
+
+        <div className="flex justify-end">
           <Link
             href="/facturas-compra/nueva"
             className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90"

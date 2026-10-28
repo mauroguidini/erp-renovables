@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useRole } from "../RoleContext";
 import ImportarChequesEmitidos, { ETIQUETA_ESTADO_CHEQUE } from "./ImportarChequesEmitidos";
+import UltimoRegistro from "../UltimoRegistro";
 
 function fechaLegible(iso) {
   const [a, m, d] = iso.split("-").map(Number);
@@ -266,6 +267,11 @@ export default function ChequesEmitidos() {
     .filter((c) => !soloSinVincular || !c.factura_id)
     .filter((c) => coincideBusqueda(c, busqueda));
 
+  // cheques ya viene ordenado por fecha_pago desc y sin filtrar en el
+  // fetch (el filtrado de arriba es solo del lado del cliente), así que el
+  // primero de la lista completa es siempre el último cargado de verdad.
+  const ultimoCheque = cheques[0] ?? null;
+
   return (
     <div className="min-h-screen bg-zinc-50 p-4 font-sans sm:p-8">
       <div className="mx-auto max-w-4xl">
@@ -274,6 +280,17 @@ export default function ChequesEmitidos() {
           Cheques propios entregados a proveedores. Vinculá cada uno a la factura que paga — eso
           la marca como pagada.
         </p>
+
+        <div className="mt-4">
+          <UltimoRegistro
+            cargando={cargando}
+            texto={
+              ultimoCheque
+                ? `Último cheque cargado: N°${ultimoCheque.numero_cheque}, ${fechaLegible(ultimoCheque.fecha_pago)}`
+                : "Todavía no cargaste ningún cheque."
+            }
+          />
+        </div>
 
         <ImportarChequesEmitidos bancos={bancos} onImportado={cargarCheques} />
 

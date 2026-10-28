@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useRole } from "../../RoleContext";
+import UltimoRegistro from "../../UltimoRegistro";
 
 const BUCKET = "certificaciones-archivos";
 
@@ -412,8 +413,25 @@ export default function Certificaciones({ obraId, hitos, obraNombre }) {
     .filter((c) => c.estado === "facturado")
     .reduce((acc, c) => acc + Number(c.monto_certificado), 0);
 
+  // El último CARGADO de verdad (orden de carga), no el de mayor número —
+  // en la práctica casi siempre coinciden, pero created_at es lo que
+  // realmente responde "¿qué fue lo último que entré acá?".
+  const ultimoCertificado =
+    certificaciones.length > 0
+      ? [...certificaciones].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0]
+      : null;
+
   return (
     <>
+      <UltimoRegistro
+        cargando={cargando}
+        texto={
+          ultimoCertificado
+            ? `Último certificado cargado: ${new Date(ultimoCertificado.created_at).toLocaleDateString("es-AR")}, N°${ultimoCertificado.numero} (${formatearMonto(ultimoCertificado.monto_certificado)})`
+            : "Todavía no hay certificados cargados en esta obra."
+        }
+      />
+
       {!cargando && !error && certificaciones.length > 0 && (
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
           <div className="rounded-lg border border-zinc-200 bg-white p-2.5">

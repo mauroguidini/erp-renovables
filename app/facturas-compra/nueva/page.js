@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { useRole } from "../../RoleContext";
-import CamposFactura, { FORM_INICIAL } from "../CamposFactura";
+import CamposFactura, { FORM_INICIAL, fechaLegible } from "../CamposFactura";
+import UltimoRegistro from "../../UltimoRegistro";
 
 const BUCKET = "facturas-compra";
 
@@ -23,6 +24,23 @@ export default function NuevaFacturaCompra() {
   const [comprobante, setComprobante] = useState(null);
   const [guardando, setGuardando] = useState(false);
   const [errorGuardado, setErrorGuardado] = useState(null);
+
+  const [ultimaFactura, setUltimaFactura] = useState(null);
+  const [cargandoUltima, setCargandoUltima] = useState(true);
+
+  useEffect(() => {
+    supabase
+      .from("facturas_compra")
+      .select("fecha, numero_factura, proveedor_id")
+      .order("fecha", { ascending: false })
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+      .then(({ data }) => {
+        setUltimaFactura(data ?? null);
+        setCargandoUltima(false);
+      });
+  }, []);
 
   useEffect(() => {
     supabase
@@ -137,6 +155,19 @@ export default function NuevaFacturaCompra() {
         <h1 className="mt-2 text-2xl font-semibold text-primary">
           Cargar factura o nota de crédito
         </h1>
+
+        <div className="mt-4">
+          <UltimoRegistro
+            cargando={cargandoUltima}
+            texto={
+              ultimaFactura
+                ? `Última factura cargada: ${fechaLegible(ultimaFactura.fecha)}, ${
+                    proveedores.find((p) => p.id === ultimaFactura.proveedor_id)?.nombre ?? "—"
+                  } N°${ultimaFactura.numero_factura}`
+                : "Todavía no cargaste ninguna factura."
+            }
+          />
+        </div>
 
         <form
           onSubmit={handleAgregar}

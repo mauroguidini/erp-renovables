@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import {
   normalizarTexto,
@@ -9,6 +9,13 @@ import {
   esRechazoCheque,
   extraerNumeroCheque,
 } from "./clasificacionMovimientos";
+import UltimoRegistro from "../UltimoRegistro";
+
+function fechaLegible(iso) {
+  if (!iso) return "—";
+  const [a, m, d] = iso.split("-").map(Number);
+  return new Date(a, m - 1, d).toLocaleDateString("es-AR");
+}
 
 // Columnas que nos interesan del extracto bancario, buscadas por palabra
 // clave (no por texto exacto) porque no tenemos un archivo real de
@@ -328,6 +335,31 @@ export default function ImportarExtracto({ bancos, onImportado }) {
   const [errorImportar, setErrorImportar] = useState(null);
   const [exito, setExito] = useState(null);
 
+  // Último movimiento importado PARA ESTE BANCO puntual — cada cuenta se
+  // importa por separado, así que el texto de referencia cambia solo al
+  // cambiar de banco, no mezcla las dos cuentas.
+  const [ultimoMovimiento, setUltimoMovimiento] = useState(null);
+  const [cargandoUltimo, setCargandoUltimo] = useState(false);
+
+  const cargarUltimoMovimiento = useCallback(async (id) => {
+    if (!id) return;
+    setCargandoUltimo(true);
+    const { data } = await supabase
+      .from("movimientos_bancarios")
+      .select("fecha, concepto")
+      .eq("banco_id", id)
+      .order("fecha", { ascending: false })
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    setUltimoMovimiento(data ?? null);
+    setCargandoUltimo(false);
+  }, []);
+
+  useEffect(() => {
+    if (bancoId) cargarUltimoMovimiento(bancoId);
+  }, [bancoId, cargarUltimoMovimiento]);
+
   async function handleArchivoSeleccionado(e) {
     const file = e.target.files?.[0] ?? null;
     setResultado(null);
@@ -367,7 +399,11 @@ export default function ImportarExtracto({ bancos, onImportado }) {
     const { error } = await supabase.from("movimientos_bancarios").insert(resultado.validas);
 
     if (error) {
-      setErrorImportar(error.message);
+      setErrorImportar(
+        error.code === "23505"
+          ? "Se encontró un duplicado justo al importar (puede que alguien haya importado el mismo archivo en paralelo). No se importó nada de este lote — probá de nuevo."
+          : error.message
+      );
       setImportando(false);
       return;
     }
@@ -395,6 +431,7 @@ export default function ImportarExtracto({ bancos, onImportado }) {
     );
     setResultado(null);
     setImportando(false);
+    await cargarUltimoMovimiento(bancoId);
     onImportado?.();
   }
 
@@ -442,6 +479,17 @@ export default function ImportarExtracto({ bancos, onImportado }) {
                 className="mt-1 block text-sm text-zinc-700"
               />
             </div>
+          </div>
+
+          <div className="mt-3">
+            <UltimoRegistro
+              cargando={cargandoUltimo}
+              texto={
+                ultimoMovimiento
+                  ? `Último movimiento importado de ${bancos.find((b) => b.id === bancoId)?.nombre ?? "este banco"}: ${fechaLegible(ultimoMovimiento.fecha)} (${ultimoMovimiento.concepto})`
+                  : `Todavía no importaste ningún movimiento de ${bancos.find((b) => b.id === bancoId)?.nombre ?? "este banco"}.`
+              }
+            />
           </div>
 
           {validando && <p className="mt-3 text-sm text-zinc-600">Leyendo archivo...</p>}
