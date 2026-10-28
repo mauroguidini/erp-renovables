@@ -9,7 +9,11 @@ const ETIQUETAS_CAMPO = {
   llego_tarde: "Llegó tarde",
   se_fue_antes: "Se fue antes",
   hora_inicio: "Hora de inicio",
+  hora_salida_prevista: "Salida prevista",
   hora_cierre: "Hora de cierre",
+  hora_entrada: "Hora de entrada",
+  hora_salida: "Hora de salida",
+  estado: "Estado del parte",
 };
 
 function hoyISO() {
@@ -180,7 +184,7 @@ function HistorialParte({ parteId }) {
 
 export default function ParteAsistencia({ obraId }) {
   const role = useRole();
-  const esAdmin = role === "administrador";
+  const puedeCorregirCerrado = role === "administrador" || role === "administracion";
   const puedeRegistrar =
     role === "administrador" || role === "capataz" || role === "jefe_obra";
 
@@ -190,7 +194,9 @@ export default function ParteAsistencia({ obraId }) {
   const [error, setError] = useState(null);
 
   const [horaInicioForm, setHoraInicioForm] = useState("08:00");
+  const [horaSalidaPrevistaForm, setHoraSalidaPrevistaForm] = useState("17:00");
   const [horaCierreForm, setHoraCierreForm] = useState("17:00");
+  const [horaPrevistaFaltante, setHoraPrevistaFaltante] = useState("17:00");
   const [guardando, setGuardando] = useState(false);
 
   const cargar = useCallback(async () => {
@@ -242,6 +248,7 @@ export default function ParteAsistencia({ obraId }) {
       p_obra_id: obraId,
       p_fecha: fecha,
       p_hora_inicio: horaInicioForm,
+      p_hora_salida_prevista: horaSalidaPrevistaForm,
     });
 
     if (error) {
@@ -249,6 +256,65 @@ export default function ParteAsistencia({ obraId }) {
     } else {
       await cargar();
     }
+    setGuardando(false);
+  }
+
+  // Partes abiertos de antes de este cambio no tienen horario de salida
+  // previsto (no existía) — se pide una sola vez acá, antes de poder seguir
+  // usando los horarios individuales.
+  async function handleFijarPrevista(e) {
+    e.preventDefault();
+    setGuardando(true);
+    setError(null);
+
+    const { error } = await supabase.rpc("fijar_horario_previsto", {
+      p_parte_id: parte.id,
+      p_hora_salida_prevista: horaPrevistaFaltante,
+    });
+
+    if (error) {
+      setError(error.message);
+    } else {
+      await cargar();
+    }
+    setGuardando(false);
+  }
+
+  async function handleReabrir() {
+    if (!confirm("¿Reabrir este parte? Capataz y jefe de obra van a poder volver a editarlo.")) {
+      return;
+    }
+    setGuardando(true);
+    setError(null);
+
+    const { error } = await supabase.rpc("reabrir_parte_asistencia", { p_parte_id: parte.id });
+
+    if (error) setError(error.message);
+    else await cargar();
+    setGuardando(false);
+  }
+
+  // Aplica el horario por defecto de la jornada a todos los obreros que
+  // todavía NO fueron tildados — nunca pisa a alguien ya marcado o editado
+  // a mano, justamente para poder usarlo en cualquier momento del día.
+  async function handleMarcarRestantes() {
+    const faltantes = detalle.filter((d) => !d.presente);
+    if (faltantes.length === 0) return;
+
+    setGuardando(true);
+    setError(null);
+
+    const { error } = await supabase
+      .from("partes_asistencia_detalle")
+      .update({
+        presente: true,
+        hora_entrada: parte.hora_inicio,
+        hora_salida: parte.hora_salida_prevista,
+      })
+      .in("id", faltantes.map((d) => d.id));
+
+    if (error) setError(error.message);
+    await cargar();
     setGuardando(false);
   }
 
@@ -272,9 +338,18 @@ export default function ParteAsistencia({ obraId }) {
 
   async function handleToggleCampo(fila, campo, valor) {
     const cambios = { [campo]: valor };
-    if (campo === "presente" && !valor) {
-      cambios.llego_tarde = false;
-      cambios.se_fue_antes = false;
+    if (campo === "presente") {
+      if (!valor) {
+        cambios.llego_tarde = false;
+        cambios.se_fue_antes = false;
+        cambios.hora_entrada = null;
+        cambios.hora_salida = null;
+      } else {
+        // Al marcarlo presente, arranca con el horario por defecto de la
+        // jornada — se puede cambiar suelto después, antes de cerrar.
+        cambios.hora_entrada = parte.hora_inicio;
+        cambios.hora_salida = parte.hora_salida_prevista;
+      }
     }
 
     setDetalle((prev) =>
@@ -292,7 +367,24 @@ export default function ParteAsistencia({ obraId }) {
     }
   }
 
-  const puedeEditar = !!parte && (esAdmin || (puedeRegistrar && parte.estado === "abierto"));
+  async function handleCambiarHorario(fila, campo, valor) {
+    setDetalle((prev) =>
+      prev.map((d) => (d.id === fila.id ? { ...d, [campo]: valor || null } : d))
+    );
+
+    const { error } = await supabase
+      .from("partes_asistencia_detalle")
+      .update({ [campo]: valor || null })
+      .eq("id", fila.id);
+
+    if (error) {
+      setError(error.message);
+      cargar();
+    }
+  }
+
+  const puedeEditar =
+    !!parte && (puedeCorregirCerrado || (puedeRegistrar && parte.estado === "abierto"));
 
   return (
     <>
@@ -320,13 +412,25 @@ export default function ParteAsistencia({ obraId }) {
         >
           <div>
             <label className="block text-xs font-medium text-zinc-700">
-              Hora de inicio de la jornada
+              Hora de entrada de la jornada
             </label>
             <input
               required
               type="time"
               value={horaInicioForm}
               onChange={(e) => setHoraInicioForm(e.target.value)}
+              className="mt-1 rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-zinc-700">
+              Hora de salida prevista
+            </label>
+            <input
+              required
+              type="time"
+              value={horaSalidaPrevistaForm}
+              onChange={(e) => setHoraSalidaPrevistaForm(e.target.value)}
               className="mt-1 rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900"
             />
           </div>
@@ -337,6 +441,10 @@ export default function ParteAsistencia({ obraId }) {
           >
             {guardando ? "Abriendo..." : "Abrir parte de este día"}
           </button>
+          <p className="w-full text-xs text-zinc-500">
+            Son el horario por defecto: se aplica a cada obrero al marcarlo presente, y se puede
+            cambiar individualmente antes de cerrar.
+          </p>
         </form>
       )}
 
@@ -358,7 +466,10 @@ export default function ParteAsistencia({ obraId }) {
             >
               {parte.estado === "cerrado" ? "Cerrado" : "Abierto"}
             </span>
-            <span>Inicio: {parte.hora_inicio}</span>
+            <span>Entrada: {parte.hora_inicio}</span>
+            {parte.hora_salida_prevista && (
+              <span>· Salida prevista: {parte.hora_salida_prevista}</span>
+            )}
             {parte.hora_cierre && <span>· Cierre: {parte.hora_cierre}</span>}
           </div>
           {parte.estado === "cerrado" && (
@@ -368,62 +479,146 @@ export default function ParteAsistencia({ obraId }) {
             </p>
           )}
 
-          {parte.estado === "cerrado" && !esAdmin && (
+          {parte.estado === "cerrado" && !puedeCorregirCerrado && (
             <p className="mt-2 rounded-md bg-green-50 px-2.5 py-1.5 text-xs text-green-700">
-              Este parte ya está cerrado. Solo un administrador puede corregirlo.
+              Este parte ya está cerrado. Solo administración puede corregirlo.
             </p>
+          )}
+
+          {parte.estado === "cerrado" && puedeCorregirCerrado && (
+            <button
+              onClick={handleReabrir}
+              disabled={guardando}
+              className="mt-2 text-xs font-medium text-accent hover:underline disabled:opacity-50"
+            >
+              Reabrir parte
+            </button>
+          )}
+
+          {parte.estado === "abierto" && !parte.hora_salida_prevista && puedeRegistrar && (
+            <form
+              onSubmit={handleFijarPrevista}
+              className="mt-3 flex flex-wrap items-end gap-3 rounded-md border border-yellow-200 bg-yellow-50 p-3"
+            >
+              <p className="w-full text-xs text-yellow-800">
+                Este parte es de antes del horario individual y todavía no tiene una salida
+                prevista para hoy. Completala para poder seguir.
+              </p>
+              <div>
+                <label className="block text-xs font-medium text-yellow-800">
+                  Hora de salida prevista
+                </label>
+                <input
+                  required
+                  type="time"
+                  value={horaPrevistaFaltante}
+                  onChange={(e) => setHoraPrevistaFaltante(e.target.value)}
+                  className="mt-1 rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900"
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={guardando}
+                className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-white hover:bg-primary/90 disabled:opacity-50"
+              >
+                Guardar
+              </button>
+            </form>
+          )}
+
+          {parte.estado === "abierto" && puedeRegistrar && detalle.some((d) => !d.presente) && (
+            <div className="mt-3">
+              <button
+                onClick={handleMarcarRestantes}
+                disabled={guardando}
+                className="text-xs font-medium text-primary hover:underline disabled:opacity-50"
+              >
+                Marcar a todos los que faltan como presentes (horario por defecto)
+              </button>
+            </div>
           )}
 
           <div className="mt-3 divide-y divide-zinc-100">
             {detalle.map((fila) => (
-              <div
-                key={fila.id}
-                className="flex flex-wrap items-center justify-between gap-2 py-2"
-              >
-                <span className="text-sm text-zinc-900">{fila.obreros?.nombre}</span>
-                <div className="flex gap-4 text-sm">
-                  <label className="flex items-center gap-1.5 text-zinc-700">
-                    <input
-                      type="checkbox"
-                      checked={fila.presente}
-                      disabled={!puedeEditar}
-                      onChange={(e) =>
-                        handleToggleCampo(fila, "presente", e.target.checked)
-                      }
-                    />
-                    Presente
-                  </label>
-                  <label
-                    className={`flex items-center gap-1.5 ${
-                      fila.presente ? "text-zinc-700" : "text-zinc-300"
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={fila.llego_tarde}
-                      disabled={!puedeEditar || !fila.presente}
-                      onChange={(e) =>
-                        handleToggleCampo(fila, "llego_tarde", e.target.checked)
-                      }
-                    />
-                    Llegó tarde
-                  </label>
-                  <label
-                    className={`flex items-center gap-1.5 ${
-                      fila.presente ? "text-zinc-700" : "text-zinc-300"
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={fila.se_fue_antes}
-                      disabled={!puedeEditar || !fila.presente}
-                      onChange={(e) =>
-                        handleToggleCampo(fila, "se_fue_antes", e.target.checked)
-                      }
-                    />
-                    Se fue antes
-                  </label>
+              <div key={fila.id} className="py-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-sm text-zinc-900">{fila.obreros?.nombre}</span>
+                  <div className="flex gap-4 text-sm">
+                    <label className="flex items-center gap-1.5 text-zinc-700">
+                      <input
+                        type="checkbox"
+                        checked={fila.presente}
+                        disabled={!puedeEditar}
+                        onChange={(e) =>
+                          handleToggleCampo(fila, "presente", e.target.checked)
+                        }
+                      />
+                      Presente
+                    </label>
+                    <label
+                      className={`flex items-center gap-1.5 ${
+                        fila.presente ? "text-zinc-700" : "text-zinc-300"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={fila.llego_tarde}
+                        disabled={!puedeEditar || !fila.presente}
+                        onChange={(e) =>
+                          handleToggleCampo(fila, "llego_tarde", e.target.checked)
+                        }
+                      />
+                      Llegó tarde
+                    </label>
+                    <label
+                      className={`flex items-center gap-1.5 ${
+                        fila.presente ? "text-zinc-700" : "text-zinc-300"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={fila.se_fue_antes}
+                        disabled={!puedeEditar || !fila.presente}
+                        onChange={(e) =>
+                          handleToggleCampo(fila, "se_fue_antes", e.target.checked)
+                        }
+                      />
+                      Se fue antes
+                    </label>
+                  </div>
                 </div>
+
+                {fila.presente && (
+                  <div className="mt-1.5 flex flex-wrap items-center gap-3 pl-0.5">
+                    <label className="flex items-center gap-1.5 text-xs text-zinc-600">
+                      Entrada
+                      <input
+                        type="time"
+                        value={fila.hora_entrada ?? ""}
+                        disabled={!puedeEditar}
+                        onChange={(e) => handleCambiarHorario(fila, "hora_entrada", e.target.value)}
+                        className="rounded-md border border-zinc-300 bg-white px-2 py-1 text-xs text-zinc-900 disabled:bg-zinc-100"
+                      />
+                    </label>
+                    <label className="flex items-center gap-1.5 text-xs text-zinc-600">
+                      Salida
+                      <input
+                        type="time"
+                        value={fila.hora_salida ?? ""}
+                        disabled={!puedeEditar}
+                        onChange={(e) => handleCambiarHorario(fila, "hora_salida", e.target.value)}
+                        className="rounded-md border border-zinc-300 bg-white px-2 py-1 text-xs text-zinc-900 disabled:bg-zinc-100"
+                      />
+                    </label>
+                    {(!fila.hora_entrada ||
+                      !fila.hora_salida ||
+                      fila.hora_entrada >= fila.hora_salida) && (
+                      <span className="text-xs text-accent">
+                        Falta completar o corregir el horario
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
             ))}
             {detalle.length === 0 && (
