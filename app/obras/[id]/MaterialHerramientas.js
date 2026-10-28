@@ -5,6 +5,7 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import { useRole } from "../../RoleContext";
 import SignaturePad from "../../SignaturePad";
+import UltimoRegistro from "../../UltimoRegistro";
 
 function hoyISO() {
   return new Date().toISOString().slice(0, 10);
@@ -24,6 +25,7 @@ const ITEM_INICIAL = { descripcion: "", categoria: "material", cantidad: "1" };
 function FormularioMovimiento({ obraId, onCancelar, onGuardado }) {
   const [tipo, setTipo] = useState("ingreso");
   const [fecha, setFecha] = useState(hoyISO());
+  const [origen, setOrigen] = useState("");
   const [items, setItems] = useState([{ ...ITEM_INICIAL }]);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState(null);
@@ -111,6 +113,7 @@ function FormularioMovimiento({ obraId, onCancelar, onGuardado }) {
       p_fecha: fecha,
       p_items: itemsLimpios,
       p_firma_imagen: firmaRef.current.exportar(),
+      p_origen: tipo === "ingreso" ? origen.trim() || null : null,
     });
 
     if (error) {
@@ -163,6 +166,21 @@ function FormularioMovimiento({ obraId, onCancelar, onGuardado }) {
           />
         </div>
       </div>
+
+      {tipo === "ingreso" && (
+        <div className="mt-3">
+          <label className="block text-xs font-medium text-zinc-700">
+            Origen (opcional, para tener registro de dónde viene)
+          </label>
+          <input
+            type="text"
+            value={origen}
+            onChange={(e) => setOrigen(e.target.value)}
+            placeholder='Ej: "Depósito central", "Comprado a Ferretería Pérez"'
+            className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900"
+          />
+        </div>
+      )}
 
       <div className="mt-4">
         <label className="block text-xs font-medium text-zinc-700">Ítems *</label>
@@ -287,6 +305,9 @@ function MovimientoCard({ obraId, movimiento }) {
           </Link>
         </div>
       </div>
+      {movimiento.origen && (
+        <p className="mt-1 text-xs text-zinc-500">Origen: {movimiento.origen}</p>
+      )}
       <ul className="mt-2 space-y-1 text-sm text-zinc-700">
         {(movimiento.movimientos_material_items ?? []).map((it) => (
           <li key={it.id}>
@@ -357,8 +378,24 @@ export default function MaterialHerramientas({ obraId }) {
     await cargar();
   }
 
+  // movimientos ya viene ordenado por fecha desc/created_at desc y sin
+  // filtrar (siempre trae todo lo de esta obra), así que el primero es
+  // siempre el último movimiento cargado de verdad.
+  const ultimoMovimiento = movimientos[0] ?? null;
+
   return (
     <>
+      <UltimoRegistro
+        cargando={cargando}
+        texto={
+          ultimoMovimiento
+            ? `Último movimiento: ${fechaLegible(ultimoMovimiento.fecha)} (${
+                ultimoMovimiento.tipo === "ingreso" ? "ingreso" : "salida"
+              })`
+            : "Todavía no hay movimientos de material cargados en esta obra."
+        }
+      />
+
       {puedeGestionar && (
         <div className="flex justify-end">
           {!mostrarForm && (

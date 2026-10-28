@@ -190,7 +190,7 @@ export default function MovimientosMaterial() {
 
     let query = supabase
       .from("movimientos_material_items")
-      .select("*, movimientos_material!inner(obra_id, tipo, fecha, creado_por_email)")
+      .select("*, movimientos_material!inner(obra_id, tipo, fecha, origen, creado_por_email)")
       .order("fecha", { foreignTable: "movimientos_material", ascending: false });
 
     if (filtroObra) query = query.eq("movimientos_material.obra_id", filtroObra);
@@ -228,6 +228,7 @@ export default function MovimientosMaterial() {
       Descripción: f.descripcion,
       Cantidad: Number(f.cantidad),
       Categoría: f.categoria === "herramienta" ? "Herramienta" : "Material",
+      Origen: f.movimientos_material.origen ?? "",
       "Cargado por": f.movimientos_material.creado_por_email ?? "",
     }));
 
@@ -360,6 +361,7 @@ export default function MovimientosMaterial() {
                     <th className="px-3 py-2 font-medium">Descripción</th>
                     <th className="px-3 py-2 font-medium">Cantidad</th>
                     <th className="px-3 py-2 font-medium">Categoría</th>
+                    <th className="px-3 py-2 font-medium">Origen</th>
                     <th className="px-3 py-2 font-medium">Cargado por</th>
                   </tr>
                 </thead>
@@ -388,6 +390,9 @@ export default function MovimientosMaterial() {
                       <td className="px-3 py-2 text-zinc-700">{formatearCantidad(f.cantidad)}</td>
                       <td className="px-3 py-2 text-zinc-700">
                         {f.categoria === "herramienta" ? "Herramienta" : "Material"}
+                      </td>
+                      <td className="px-3 py-2 text-zinc-500">
+                        {f.movimientos_material.origen ?? "—"}
                       </td>
                       <td className="px-3 py-2 text-zinc-500">
                         {f.movimientos_material.creado_por_email ?? "—"}

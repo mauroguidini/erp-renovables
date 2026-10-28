@@ -160,6 +160,12 @@ export default function DetalleMovimientoMaterial() {
               {new Date(movimiento.created_at).toLocaleString()}
             </p>
           </div>
+          {movimiento.origen && (
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">Origen</p>
+              <p className="mt-1 text-sm text-zinc-900">{movimiento.origen}</p>
+            </div>
+          )}
         </div>
 
         <div className="mt-6 rounded-lg border border-zinc-200 bg-white print:mt-4 print:border-0">
